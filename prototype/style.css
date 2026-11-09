@@ -1,0 +1,175 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
+    background: #f5f5f5;
+}
+
+/* Toolbar */
+#toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 10px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#addCardBtn {
+    padding: 8px 16px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+#addCardBtn:hover {
+    background: #0056b3;
+}
+
+#addCardBtn:active {
+    background: #004085;
+}
+
+/* Canvas container */
+#canvasContainer {
+    position: fixed;
+    top: 50px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+}
+
+#canvas {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 2000px;
+    min-height: 2000px;
+}
+
+/* SVG edge layer */
+#edgeLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+#edgeLayer line {
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+/* Card styles */
+.card {
+    position: absolute;
+    width: 180px;
+    background: white;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 10;
+    cursor: move;
+}
+
+.card.selected {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.25);
+    z-index: 100;
+}
+
+.card-header {
+    padding: 10px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 6px 6px 0 0;
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    user-select: none;
+}
+
+.card-body {
+    padding: 15px 10px;
+    min-height: 60px;
+    position: relative;
+}
+
+/* Port styles */
+.port {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #6c757d;
+    border: 2px solid white;
+    cursor: pointer;
+    z-index: 20;
+}
+
+.port:hover {
+    background: #495057;
+    transform: scale(1.2);
+}
+
+.port.active {
+    background: #28a745;
+    border-color: #28a745;
+    box-shadow: 0 0 0 3px rgba(40,167,69,0.3);
+}
+
+.port.input-port {
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.port.output-port {
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Edge styles */
+.edge {
+    stroke: #6c757d;
+    stroke-width: 2;
+    fill: none;
+}
+
+.edge:hover {
+    stroke: #495057;
+    stroke-width: 3;
+}
+
+.edge.selected {
+    stroke: #007bff;
+    stroke-width: 3;
+}
+
+.edge-draft {
+    stroke: #28a745;
+    stroke-width: 2;
+    stroke-dasharray: 5, 5;
+    fill: none;
+    pointer-events: none;
+}
