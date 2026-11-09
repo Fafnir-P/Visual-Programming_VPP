@@ -3,17 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Generation phase: widen connect-src to the Bedrock host or a local proxy. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'">
     <title>Visual Programming Prototype</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="sidebar-open">
     <div id="toolbar">
-        <button id="addCardBtn" type="button">Add Card</button>
+        <button id="sidebarToggle" type="button" aria-controls="sidebar" aria-expanded="true">Hide Sidebar</button>
+        <span id="status" aria-live="polite"></span>
+        <button id="generateBtn" type="button" disabled>Generate</button>
     </div>
+
+    <aside id="sidebar" aria-label="Card library">
+        <div id="sidebarTabs" role="tablist">
+            <button type="button" role="tab" id="tabCatalog" class="tab active" aria-selected="true" data-tab="catalog">Cards</button>
+            <button type="button" role="tab" id="tabOrder" class="tab" aria-selected="false" data-tab="order">Order (<span id="orderCount">0</span>)</button>
+            <button type="button" role="tab" id="tabModel" class="tab" aria-selected="false" data-tab="model">Model</button>
+        </div>
+
+        <section id="panelCatalog" class="panel" role="tabpanel" aria-labelledby="tabCatalog">
+            <input id="searchInput" type="search" placeholder="Search cards" aria-label="Search cards">
+            <div id="categoryFilters" role="group" aria-label="Card categories"></div>
+            <div id="catalogSummary"></div>
+            <ul id="catalogList"></ul>
+        </section>
+
+        <section id="panelOrder" class="panel" role="tabpanel" aria-labelledby="tabOrder" hidden>
+            <p class="hint">Cards run top to bottom. Drag a row, or use the arrows.</p>
+            <ol id="orderList"></ol>
+        </section>
+
+        <section id="panelModel" class="panel" role="tabpanel" aria-labelledby="tabModel" hidden>
+            <div class="form-group">
+                <label for="bedrockApiKeyInput">Bedrock API key</label>
+                <div class="input-with-toggle">
+                    <input id="bedrockApiKeyInput" type="password" placeholder="Enter API key" autocomplete="off">
+                    <button id="bedrockApiKeyToggle" type="button" class="toggle-btn">Show</button>
+                </div>
+                <p class="hint">Kept in memory only. Re-enter after reload.</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="regionSelect">Region</label>
+                <select id="regionSelect">
+                    <option value="us-east-1">US East (N. Virginia)</option>
+                    <option value="us-west-2">US West (Oregon)</option>
+                    <option value="eu-west-1">EU (Ireland)</option>
+                    <option value="custom">Custom...</option>
+                </select>
+                <input id="customRegionInput" type="text" placeholder="e.g., ap-southeast-1" hidden>
+            </div>
+            
+            <div class="form-group">
+                <label for="modelSelect">Model</label>
+                <select id="modelSelect">
+                    <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">Claude 3.5 Sonnet (Oct 2024)</option>
+                    <option value="anthropic.claude-3-5-haiku-20241022-v1:0">Claude 3.5 Haiku (Oct 2024)</option>
+                    <option value="anthropic.claude-3-sonnet-20240229-v1:0">Claude 3 Sonnet (Feb 2024)</option>
+                    <option value="anthropic.claude-3-haiku-20240307-v1:0">Claude 3 Haiku (Mar 2024)</option>
+                    <option value="custom">Custom model ID...</option>
+                </select>
+                <input id="customModelInput" type="text" placeholder="e.g., anthropic.claude-..." hidden>
+            </div>
+            
+            <p id="bedrockStatus" class="status-line">API key: not set</p>
+        </section>
+    </aside>
+
     <div id="canvasContainer">
-        <svg id="edgeLayer"></svg>
-        <div id="canvas"></div>
+        <div id="stage">
+            <svg id="edgeLayer"></svg>
+            <div id="canvas"></div>
+        </div>
     </div>
+
+    <dialog id="confirmDialog" aria-labelledby="confirmDialogTitle">
+        <h2 id="confirmDialogTitle">Confirm build is complete</h2>
+        <div id="confirmDialogContent"></div>
+        <p class="hint">Generation is not enabled in this version.</p>
+        <div class="dialog-buttons">
+            <button id="confirmCancelBtn" type="button">Cancel</button>
+            <button id="confirmGenerateBtn" type="button" class="primary-btn">Yes, the build is complete</button>
+        </div>
+    </dialog>
+
+    <script src="catalog.js"></script>
+    <script src="prompt.js"></script>
+    <script src="bedrock.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

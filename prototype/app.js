@@ -9,8 +9,18 @@ const state = {
     selectedEdgeID: null,
     nextNodeID: 1,
     nextEdgeID: 1,
-    edgeDraft: null  // { fromNodeID, fromPort, x, y }
+    edgeDraft: null,  // { startNodeID, startPortID, startPortType, x, y, snapTarget: null|{nodeID, portID, portType} }
+    order: [],        // node IDs in run order (explicit user order)
+    buildConfirmed: false,  // true after user confirms build is complete
+    ui: {
+        sidebarOpen: true,
+        tab: 'catalog',       // 'catalog' | 'order' | 'model'
+        category: 'all',      // category id or 'all'
+        search: ''
+    }
 };
+
+const SNAP_RADIUS = 40;
 
 // ============================================================================
 // INITIALIZATION
@@ -18,16 +28,19 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
+    initializeSidebar();
+    initBedrockUI();
     render();
 });
 
 function initializeEventListeners() {
-    // Add Card button
-    document.getElementById('addCardBtn').addEventListener('click', addCard);
-
     // Canvas background click (deselect)
     const canvas = document.getElementById('canvas');
     canvas.addEventListener('mousedown', handleCanvasMouseDown);
+
+    // Accept cards dragged in from the sidebar catalog
+    canvas.addEventListener('dragover', handleCanvasDragOver);
+    canvas.addEventListener('drop', handleCanvasDrop);
 
     // Keyboard events
     document.addEventListener('keydown', handleKeyDown);
@@ -35,22 +48,36 @@ function initializeEventListeners() {
     // Mouse move for drag and edge draft
     document.addEventListener('mousemove', handleDocumentMouseMove);
     document.addEventListener('mouseup', handleDocumentMouseUp);
+
+    // Generate button
+    document.getElementById('generateBtn').addEventListener('click', handleGenerateClick);
+
+    // Confirmation dialog
+    document.getElementById('confirmCancelBtn').addEventListener('click', handleCancelDialog);
+    document.getElementById('confirmGenerateBtn').addEventListener('click', handleConfirmGenerate);
 }
 
 // ============================================================================
 // CARD MANAGEMENT
 // ============================================================================
 
-function addCard() {
+// Place a copy of a catalog card on the canvas. The node keeps a reference to
+// its catalog card (catalogID) and is appended to the end of the run order.
+// If x/y are not given, cards are staggered so they do not stack exactly.
+function addCardFromCatalog(catalogID, x, y) {
+    const source = getCatalogCard(catalogID);
+    if (!source) return null;
+
     const id = `node_${state.nextNodeID++}`;
-    const offset = (state.nodes.size * 30) % 200;
+    const offset = (state.nodes.size * 30) % 240;
 
     const node = {
         id: id,
-        type: 'generic',
-        title: `Card ${state.nodes.size + 1}`,
-        x: 100 + offset,
-        y: 100 + offset,
+        catalogID: source.id,
+        type: source.category,
+        title: source.title,
+        x: Math.max(0, x !== undefined ? x : 40 + offset),
+        y: Math.max(0, y !== undefined ? y : 40 + offset),
         ports: {
             inputs: [{ id: 'in', name: 'Input' }],
             outputs: [{ id: 'out', name: 'Output' }]
@@ -58,7 +85,9 @@ function addCard() {
     };
 
     state.nodes.set(id, node);
+    state.order.push(id);
     render();
+    return node;
 }
 
 function deleteNode(nodeID) {
@@ -72,6 +101,7 @@ function deleteNode(nodeID) {
 
     edgesToDelete.forEach(edgeID => state.edges.delete(edgeID));
     state.nodes.delete(nodeID);
+    state.order = state.order.filter(id => id !== nodeID);
 
     if (state.selectedNodeID === nodeID) {
         state.selectedNodeID = null;
@@ -96,31 +126,101 @@ function mouseToCanvas(event) {
     };
 }
 
-function startEdgeDraft(fromNodeID, fromPort, event) {
+function beginDraft(nodeID, portID, portType, event) {
     const pt = mouseToCanvas(event);
     state.edgeDraft = {
-        fromNodeID: fromNodeID,
-        fromPort: fromPort,
+        startNodeID: nodeID,
+        startPortID: portID,
+        startPortType: portType,
         x: pt.x,
-        y: pt.y
+        y: pt.y,
+        snapTarget: null
     };
     render();
 }
 
-function updateEdgeDraft(x, y) {
-    if (state.edgeDraft) {
-        state.edgeDraft.x = x;
-        state.edgeDraft.y = y;
-        renderEdgeDraft();
-    }
-}
-
-function completeEdgeDraft(toNodeID, toPort) {
+function updateEdgeDraft(event) {
     if (!state.edgeDraft) return;
 
-    const { fromNodeID, fromPort } = state.edgeDraft;
+    const pt = mouseToCanvas(event);
+    state.edgeDraft.x = pt.x;
+    state.edgeDraft.y = pt.y;
 
-    // Reject self-connection
+    // Find nearest opposite port within snap radius
+    const oppositeType = state.edgeDraft.startPortType === 'output' ? 'input' : 'output';
+    let closestPort = null;
+    let closestDistance = SNAP_RADIUS;
+
+    state.nodes.forEach(node => {
+        if (node.id === state.edgeDraft.startNodeID) return; // Skip same node
+        
+        const ports = oppositeType === 'input' ? node.ports.inputs : node.ports.outputs;
+        ports.forEach(port => {
+            const center = getPortCenter(node.id, oppositeType, port.id);
+            if (!center) return;
+
+            const dx = pt.x - center.x;
+            const dy = pt.y - center.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < closestDistance) {
+                closestDistance = dist;
+                closestPort = {
+                    nodeID: node.id,
+                    portID: port.id,
+                    portType: oppositeType
+                };
+            }
+        });
+    });
+
+    // Clear previous snap-target styling
+    document.querySelectorAll('.port.snap-target').forEach(el => {
+        el.classList.remove('snap-target');
+    });
+
+    // Update snap target
+    state.edgeDraft.snapTarget = closestPort;
+
+    // Apply snap-target class to the port DOM element
+    if (closestPort) {
+        const cardEl = document.querySelector(`[data-node-id="${closestPort.nodeID}"]`);
+        if (cardEl) {
+            const portEl = cardEl.querySelector(
+                `.port.${closestPort.portType}-port[data-port-id="${closestPort.portID}"]`
+            );
+            if (portEl) {
+                portEl.classList.add('snap-target');
+            }
+        }
+    }
+
+    renderEdgeDraft();
+}
+
+function commitEdge() {
+    if (!state.edgeDraft || !state.edgeDraft.snapTarget) {
+        cancelEdgeDraft();
+        return;
+    }
+
+    const { startNodeID, startPortID, startPortType, snapTarget } = state.edgeDraft;
+
+    // Determine output and input sides
+    let fromNodeID, fromPort, toNodeID, toPort;
+    if (startPortType === 'output') {
+        fromNodeID = startNodeID;
+        fromPort = startPortID;
+        toNodeID = snapTarget.nodeID;
+        toPort = snapTarget.portID;
+    } else {
+        fromNodeID = snapTarget.nodeID;
+        fromPort = snapTarget.portID;
+        toNodeID = startNodeID;
+        toPort = startPortID;
+    }
+
+    // Reject self-connection (already prevented by node filter, but double-check)
     if (fromNodeID === toNodeID) {
         cancelEdgeDraft();
         return;
@@ -154,6 +254,10 @@ function completeEdgeDraft(toNodeID, toPort) {
 }
 
 function cancelEdgeDraft() {
+    // Clear snap-target styling
+    document.querySelectorAll('.port.snap-target').forEach(el => {
+        el.classList.remove('snap-target');
+    });
     state.edgeDraft = null;
     render();
 }
@@ -262,24 +366,16 @@ function handleCanvasMouseDown(event) {
 function handleCardMouseDown(nodeID, event) {
     // Check if clicking on a port
     if (event.target.classList.contains('port')) {
-        return;  // Port click handlers will handle this
+        return;  // Port mousedown handlers will handle this
     }
 
     event.stopPropagation();
     startDrag(nodeID, event);
 }
 
-function handleOutputPortClick(nodeID, portID, event) {
+function handlePortMouseDown(nodeID, portID, portType, event) {
     event.stopPropagation();
-    startEdgeDraft(nodeID, portID, event);
-}
-
-function handleInputPortClick(nodeID, portID, event) {
-    event.stopPropagation();
-
-    if (state.edgeDraft) {
-        completeEdgeDraft(nodeID, portID);
-    }
+    beginDraft(nodeID, portID, portType, event);
 }
 
 function handleEdgeClick(edgeID, event) {
@@ -291,14 +387,15 @@ function handleDocumentMouseMove(event) {
     if (dragState) {
         updateDrag(event);
     } else if (state.edgeDraft) {
-        const pt = mouseToCanvas(event);
-        updateEdgeDraft(pt.x, pt.y);
+        updateEdgeDraft(event);
     }
 }
 
 function handleDocumentMouseUp(event) {
     if (dragState) {
         endDrag();
+    } else if (state.edgeDraft) {
+        commitEdge();
     }
 }
 
@@ -310,9 +407,12 @@ function handleKeyDown(event) {
             deselectAll();
         }
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
+        // Typing in the search box must never delete cards.
+        const tag = document.activeElement ? document.activeElement.tagName : '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
         // Prevent default backspace navigation
-        if (event.key === 'Backspace' &&
-            !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        if (event.key === 'Backspace') {
             event.preventDefault();
         }
 
@@ -332,6 +432,8 @@ function render() {
     renderCards();
     renderEdges();
     renderEdgeDraft();
+    renderOrderList();
+    renderStatus();
 }
 
 function renderCards() {
@@ -357,11 +459,33 @@ function createCardElement(node) {
     card.style.left = `${node.x}px`;
     card.style.top = `${node.y}px`;
 
-    // Header
+    if (getOrderConflicts().has(node.id)) {
+        card.classList.add('order-conflict');
+        card.setAttribute('title', 'Order conflict: a connected card runs in the wrong order');
+    }
+
+    // Header: title plus the card's place in the run order
     const header = document.createElement('div');
     header.className = 'card-header';
-    header.textContent = node.title;
+
+    const title = document.createElement('span');
+    title.className = 'card-title';
+    title.textContent = node.title;
+    header.appendChild(title);
+
+    const badge = document.createElement('span');
+    badge.className = 'order-badge';
+    badge.textContent = String(state.order.indexOf(node.id) + 1);
+    badge.setAttribute('aria-label', 'Run order ' + badge.textContent);
+    header.appendChild(badge);
     card.appendChild(header);
+
+    // Category label (blank cards: no other content yet)
+    const cat = getCategory(node.type);
+    const catEl = document.createElement('div');
+    catEl.className = 'card-cat';
+    catEl.textContent = cat ? cat.label : '';
+    card.appendChild(catEl);
 
     // Body
     const body = document.createElement('div');
@@ -373,13 +497,19 @@ function createCardElement(node) {
         const portEl = document.createElement('div');
         portEl.className = 'port input-port';
         portEl.setAttribute('data-port-id', port.id);
+        portEl.setAttribute('data-port-type', 'input');
         portEl.setAttribute('title', port.name);
         portEl.setAttribute('aria-label', port.name);
         portEl.style.top = `${30 + index * 25}px`;
 
-        // Always attach the handler; the handler itself checks for an active
-        // draft. This avoids a fragile dependency on render ordering.
-        portEl.addEventListener('click', (e) => handleInputPortClick(node.id, port.id, e));
+        if (state.edgeDraft && 
+            state.edgeDraft.startNodeID === node.id && 
+            state.edgeDraft.startPortID === port.id &&
+            state.edgeDraft.startPortType === 'input') {
+            portEl.classList.add('active');
+        }
+
+        portEl.addEventListener('mousedown', (e) => handlePortMouseDown(node.id, port.id, 'input', e));
 
         body.appendChild(portEl);
     });
@@ -389,15 +519,19 @@ function createCardElement(node) {
         const portEl = document.createElement('div');
         portEl.className = 'port output-port';
         portEl.setAttribute('data-port-id', port.id);
+        portEl.setAttribute('data-port-type', 'output');
         portEl.setAttribute('title', port.name);
         portEl.setAttribute('aria-label', port.name);
         portEl.style.top = `${30 + index * 25}px`;
 
-        if (state.edgeDraft && state.edgeDraft.fromNodeID === node.id && state.edgeDraft.fromPort === port.id) {
+        if (state.edgeDraft && 
+            state.edgeDraft.startNodeID === node.id && 
+            state.edgeDraft.startPortID === port.id &&
+            state.edgeDraft.startPortType === 'output') {
             portEl.classList.add('active');
         }
 
-        portEl.addEventListener('click', (e) => handleOutputPortClick(node.id, port.id, e));
+        portEl.addEventListener('mousedown', (e) => handlePortMouseDown(node.id, port.id, 'output', e));
 
         body.appendChild(portEl);
     });
@@ -491,16 +625,36 @@ function renderEdgeDraft() {
 
     if (!state.edgeDraft) return;
 
-    // Source endpoint = the output port's real center; target = the cursor.
+    // Source endpoint = the start port's real center
     const from = getPortCenter(
-        state.edgeDraft.fromNodeID, 'output', state.edgeDraft.fromPort
+        state.edgeDraft.startNodeID, 
+        state.edgeDraft.startPortType, 
+        state.edgeDraft.startPortID
     );
     if (!from) return;
 
     const x1 = from.x;
     const y1 = from.y;
-    const x2 = state.edgeDraft.x;
-    const y2 = state.edgeDraft.y;
+    
+    // Target endpoint = snap target center if available, else cursor
+    let x2, y2;
+    if (state.edgeDraft.snapTarget) {
+        const to = getPortCenter(
+            state.edgeDraft.snapTarget.nodeID,
+            state.edgeDraft.snapTarget.portType,
+            state.edgeDraft.snapTarget.portID
+        );
+        if (to) {
+            x2 = to.x;
+            y2 = to.y;
+        } else {
+            x2 = state.edgeDraft.x;
+            y2 = state.edgeDraft.y;
+        }
+    } else {
+        x2 = state.edgeDraft.x;
+        y2 = state.edgeDraft.y;
+    }
 
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1);
@@ -510,4 +664,340 @@ function renderEdgeDraft() {
     line.setAttribute('class', 'edge-draft');
 
     svg.appendChild(line);
+}
+
+// ============================================================================
+// SIDEBAR: open/close, tabs, catalog, category filter
+// ============================================================================
+
+function initializeSidebar() {
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+        setSidebarOpen(!state.ui.sidebarOpen);
+    });
+
+    document.querySelectorAll('#sidebarTabs .tab').forEach(btn => {
+        btn.addEventListener('click', () => setTab(btn.getAttribute('data-tab')));
+    });
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+        state.ui.search = e.target.value.trim().toLowerCase();
+        renderCatalog();
+    });
+
+    renderCategoryFilters();
+    renderCatalog();
+}
+
+function setSidebarOpen(open) {
+    state.ui.sidebarOpen = open;
+    document.body.classList.toggle('sidebar-open', open);
+    const btn = document.getElementById('sidebarToggle');
+    btn.textContent = open ? 'Hide Sidebar' : 'Show Sidebar';
+    btn.setAttribute('aria-expanded', String(open));
+}
+
+function setTab(tab) {
+    state.ui.tab = tab;
+    document.querySelectorAll('#sidebarTabs .tab').forEach(btn => {
+        const active = btn.getAttribute('data-tab') === tab;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-selected', String(active));
+    });
+    document.getElementById('panelCatalog').hidden = tab !== 'catalog';
+    document.getElementById('panelOrder').hidden = tab !== 'order';
+    document.getElementById('panelModel').hidden = tab !== 'model';
+}
+
+function setCategory(categoryID) {
+    state.ui.category = categoryID;
+    renderCategoryFilters();
+    renderCatalog();
+}
+
+function renderCategoryFilters() {
+    const box = document.getElementById('categoryFilters');
+    box.innerHTML = '';
+
+    const entries = [{ id: 'all', label: 'All', count: CATALOG.length }]
+        .concat(CATEGORIES.map(c => ({ id: c.id, label: c.label.split(' / ')[0], count: c.count })));
+
+    entries.forEach(entry => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip' + (state.ui.category === entry.id ? ' active' : '');
+        chip.textContent = `${entry.label} (${entry.count})`;
+        chip.setAttribute('aria-pressed', String(state.ui.category === entry.id));
+        chip.setAttribute('data-category', entry.id);
+        chip.addEventListener('click', () => setCategory(entry.id));
+        box.appendChild(chip);
+    });
+}
+
+// Cards that match the current category filter and search text.
+function getVisibleCatalog() {
+    return CATALOG.filter(card => {
+        if (state.ui.category !== 'all' && card.category !== state.ui.category) return false;
+        if (state.ui.search && !card.title.toLowerCase().includes(state.ui.search)) return false;
+        return true;
+    });
+}
+
+function renderCatalog() {
+    const list = document.getElementById('catalogList');
+    const summary = document.getElementById('catalogSummary');
+    list.innerHTML = '';
+
+    const visible = getVisibleCatalog();
+    summary.textContent = `Showing ${visible.length} of ${CATALOG.length} cards. Click Add or drag onto the canvas.`;
+
+    if (visible.length === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'empty-note';
+        empty.textContent = 'No cards match.';
+        list.appendChild(empty);
+        return;
+    }
+
+    visible.forEach(card => {
+        const li = document.createElement('li');
+        li.className = 'catalog-item';
+        li.draggable = true;
+        li.setAttribute('data-catalog-id', card.id);
+
+        const title = document.createElement('span');
+        title.className = 'item-title';
+        title.textContent = card.title;
+        li.appendChild(title);
+
+        const cat = document.createElement('span');
+        cat.className = 'item-cat';
+        cat.textContent = card.id.replace('catalog_', '#');
+        li.appendChild(cat);
+
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'mini-btn';
+        add.textContent = 'Add';
+        add.setAttribute('aria-label', 'Add ' + card.title + ' to canvas');
+        add.addEventListener('click', () => addCardFromCatalog(card.id));
+        li.appendChild(add);
+
+        li.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('application/x-catalog-id', card.id);
+            e.dataTransfer.setData('text/plain', card.id);
+            e.dataTransfer.effectAllowed = 'copy';
+        });
+
+        list.appendChild(li);
+    });
+}
+
+// ============================================================================
+// DROP FROM SIDEBAR ONTO CANVAS (in-memory only)
+// ============================================================================
+
+function handleCanvasDragOver(event) {
+    if (event.dataTransfer && event.dataTransfer.types.includes('application/x-catalog-id')) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+    }
+}
+
+function handleCanvasDrop(event) {
+    const catalogID = event.dataTransfer.getData('application/x-catalog-id');
+    if (!catalogID) return;
+    event.preventDefault();
+    const pt = mouseToCanvas(event);
+    // Center the new card (about 180 x 110) under the cursor.
+    addCardFromCatalog(catalogID, pt.x - 90, pt.y - 30);
+}
+
+// ============================================================================
+// ORDER: explicit run order of the cards on the canvas
+// ============================================================================
+
+// Move a node to a new index in the run order.
+function moveOrder(nodeID, toIndex) {
+    const from = state.order.indexOf(nodeID);
+    if (from === -1) return;
+    const clamped = Math.max(0, Math.min(state.order.length - 1, toIndex));
+    if (clamped === from) return;
+    state.order.splice(from, 1);
+    state.order.splice(clamped, 0, nodeID);
+    render();
+}
+
+// Node IDs whose order contradicts a link: a card that feeds another card must
+// come earlier in the order than the card it feeds.
+function getOrderConflicts() {
+    const conflicts = new Set();
+    state.edges.forEach(edge => {
+        const a = state.order.indexOf(edge.fromNodeID);
+        const b = state.order.indexOf(edge.toNodeID);
+        if (a !== -1 && b !== -1 && a > b) {
+            conflicts.add(edge.fromNodeID);
+            conflicts.add(edge.toNodeID);
+        }
+    });
+    return conflicts;
+}
+
+let draggingOrderID = null;
+
+function renderOrderList() {
+    const list = document.getElementById('orderList');
+    document.getElementById('orderCount').textContent = String(state.order.length);
+    list.innerHTML = '';
+
+    if (state.order.length === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'empty-note';
+        empty.textContent = 'No cards yet. Add some from the Cards tab.';
+        list.appendChild(empty);
+        return;
+    }
+
+    const conflicts = getOrderConflicts();
+
+    state.order.forEach((nodeID, index) => {
+        const node = state.nodes.get(nodeID);
+        if (!node) return;
+
+        const li = document.createElement('li');
+        li.className = 'order-item' + (state.selectedNodeID === nodeID ? ' selected' : '');
+        li.draggable = true;
+        li.setAttribute('data-order-id', nodeID);
+
+        const num = document.createElement('span');
+        num.className = 'order-num';
+        num.textContent = String(index + 1);
+        li.appendChild(num);
+
+        const title = document.createElement('span');
+        title.className = 'item-title';
+        title.textContent = node.title;
+        li.appendChild(title);
+
+        if (conflicts.has(nodeID)) {
+            const warn = document.createElement('span');
+            warn.className = 'order-warn';
+            warn.textContent = '!';
+            warn.setAttribute('title', 'Order conflict with a connected card');
+            warn.setAttribute('aria-label', 'Order conflict with a connected card');
+            li.appendChild(warn);
+        }
+
+        const up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'mini-btn';
+        up.textContent = '\u2191';
+        up.disabled = index === 0;
+        up.setAttribute('aria-label', 'Move ' + node.title + ' up');
+        up.addEventListener('click', (e) => { e.stopPropagation(); moveOrder(nodeID, index - 1); });
+        li.appendChild(up);
+
+        const down = document.createElement('button');
+        down.type = 'button';
+        down.className = 'mini-btn';
+        down.textContent = '\u2193';
+        down.disabled = index === state.order.length - 1;
+        down.setAttribute('aria-label', 'Move ' + node.title + ' down');
+        down.addEventListener('click', (e) => { e.stopPropagation(); moveOrder(nodeID, index + 1); });
+        li.appendChild(down);
+
+        // Click a row to select that card on the canvas
+        li.addEventListener('click', () => selectNode(nodeID));
+
+        // Drag a row to reorder
+        li.addEventListener('dragstart', (e) => {
+            draggingOrderID = nodeID;
+            e.dataTransfer.setData('application/x-order-id', nodeID);
+            e.dataTransfer.effectAllowed = 'move';
+            li.classList.add('dragging');
+        });
+        li.addEventListener('dragend', () => {
+            draggingOrderID = null;
+            li.classList.remove('dragging');
+        });
+        li.addEventListener('dragover', (e) => {
+            if (!draggingOrderID) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            li.classList.add('drag-over');
+        });
+        li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+        li.addEventListener('drop', (e) => {
+            e.preventDefault();
+            li.classList.remove('drag-over');
+            if (draggingOrderID && draggingOrderID !== nodeID) {
+                // The dragged card takes the place of the row it is dropped on.
+                moveOrder(draggingOrderID, index);
+            }
+            draggingOrderID = null;
+        });
+
+        list.appendChild(li);
+    });
+}
+
+function renderStatus() {
+    const conflicts = getOrderConflicts().size;
+    let text = `${state.nodes.size} cards \u00b7 ${state.edges.size} links`;
+    if (conflicts > 0) text += ` \u00b7 ${conflicts} order conflicts`;
+    
+    if (state.buildConfirmed) {
+        text += ' \u00b7 Build confirmed. Generation is not enabled yet.';
+    }
+    
+    document.getElementById('status').textContent = text;
+    
+    // Update Generate button enabled state
+    const generateBtn = document.getElementById('generateBtn');
+    generateBtn.disabled = state.nodes.size === 0;
+}
+
+// ============================================================================
+// GENERATE & CONFIRMATION DIALOG
+// ============================================================================
+
+function handleGenerateClick() {
+    const dialog = document.getElementById('confirmDialog');
+    const content = document.getElementById('confirmDialogContent');
+    
+    const conflicts = getOrderConflicts();
+    let message = `You have ${state.nodes.size} card${state.nodes.size !== 1 ? 's' : ''} and ${state.edges.size} link${state.edges.size !== 1 ? 's' : ''}.`;
+    
+    if (conflicts.size > 0) {
+        message += `\n\nWarning: ${conflicts.size} card${conflicts.size !== 1 ? 's have' : ' has'} order conflicts with connected cards.`;
+    }
+    
+    content.textContent = message;
+    content.style.whiteSpace = 'pre-wrap';
+    
+    dialog.showModal();
+}
+
+function handleCancelDialog() {
+    const dialog = document.getElementById('confirmDialog');
+    dialog.close();
+}
+
+function handleConfirmGenerate() {
+    // Set build confirmed flag
+    state.buildConfirmed = true;
+    
+    // Validate that assembleBedrockRequest can build without error (but don't send)
+    try {
+        const request = assembleBedrockRequest();
+        // Successfully assembled; we could validate structure here if needed
+    } catch (error) {
+        // If assembly fails, show error (shouldn't happen with current implementation)
+        alert('Error assembling request: ' + error.message);
+    }
+    
+    // Close dialog and update status
+    const dialog = document.getElementById('confirmDialog');
+    dialog.close();
+    
+    renderStatus();
 }
