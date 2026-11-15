@@ -12,6 +12,8 @@
     <div id="toolbar">
         <button id="sidebarToggle" type="button" aria-controls="sidebar" aria-expanded="true">Hide Sidebar</button>
         <span id="status" aria-live="polite"></span>
+        <span id="userLabel"></span>
+        <button id="authBtn" type="button" hidden>Sign in</button>
         <button id="generateBtn" type="button" disabled>Generate</button>
     </div>
 
@@ -41,32 +43,24 @@
                     <input id="bedrockApiKeyInput" type="password" placeholder="Enter API key" autocomplete="off">
                     <button id="bedrockApiKeyToggle" type="button" class="toggle-btn">Show</button>
                 </div>
-                <p class="hint">Kept in memory only. Re-enter after reload.</p>
+                <p id="apiKeyHint" class="hint">Not signed in: kept in memory only. Sign in to save it.</p>
             </div>
             
             <div class="form-group">
                 <label for="regionSelect">Region</label>
-                <select id="regionSelect">
-                    <option value="us-east-1">US East (N. Virginia)</option>
-                    <option value="us-west-2">US West (Oregon)</option>
-                    <option value="eu-west-1">EU (Ireland)</option>
-                    <option value="custom">Custom...</option>
-                </select>
+                <select id="regionSelect"></select>
                 <input id="customRegionInput" type="text" placeholder="e.g., ap-southeast-1" hidden>
+                <p class="hint">The region decides which models you can use, where your data is processed, and the price. Auto lets AWS pick the best region. Choose a fixed region if your data must stay in one place.</p>
             </div>
             
             <div class="form-group">
                 <label for="modelSelect">Model</label>
-                <select id="modelSelect">
-                    <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">Claude 3.5 Sonnet (Oct 2024)</option>
-                    <option value="anthropic.claude-3-5-haiku-20241022-v1:0">Claude 3.5 Haiku (Oct 2024)</option>
-                    <option value="anthropic.claude-3-sonnet-20240229-v1:0">Claude 3 Sonnet (Feb 2024)</option>
-                    <option value="anthropic.claude-3-haiku-20240307-v1:0">Claude 3 Haiku (Mar 2024)</option>
-                    <option value="custom">Custom model ID...</option>
-                </select>
-                <input id="customModelInput" type="text" placeholder="e.g., anthropic.claude-..." hidden>
+                <select id="modelSelect"></select>
+                <input id="customModelInput" type="text" placeholder="e.g., anthropic.claude-sonnet-5-5" hidden>
+                <p class="hint">Snapshot of Bedrock text models. If one is missing, use Custom model ID.</p>
             </div>
             
+            <p id="routeInfo" class="hint route-info"></p>
             <p id="bedrockStatus" class="status-line">API key: not set</p>
         </section>
     </aside>
@@ -88,8 +82,38 @@
         </div>
     </dialog>
 
+    <dialog id="loginDialog" aria-labelledby="loginTitle">
+        <h2 id="loginTitle">Sign in</h2>
+        <div id="loginTabs" role="tablist">
+            <button type="button" role="tab" id="loginTabSignIn" class="tab active" aria-selected="true">Sign in</button>
+            <button type="button" role="tab" id="loginTabCreate" class="tab" aria-selected="false">Create account</button>
+        </div>
+        <form id="loginForm" autocomplete="off">
+            <div class="form-group">
+                <label for="loginUsername">Username</label>
+                <input id="loginUsername" type="text" autocomplete="username" maxlength="32">
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input id="loginPassword" type="password" autocomplete="current-password" maxlength="256">
+            </div>
+            <div class="form-group" id="loginConfirmGroup" hidden>
+                <label for="loginConfirm">Repeat password</label>
+                <input id="loginConfirm" type="password" autocomplete="new-password" maxlength="256">
+            </div>
+            <p id="loginError" class="login-error" role="alert"></p>
+            <p class="hint">The account lives on this computer only. A signed-in account keeps your Bedrock API key between runs.</p>
+            <div class="dialog-buttons">
+                <button id="loginGuestBtn" type="button">Continue without login</button>
+                <button id="loginSubmitBtn" type="submit" class="primary-btn">Sign in</button>
+            </div>
+        </form>
+    </dialog>
+
     <script src="catalog.js"></script>
     <script src="prompt.js"></script>
+    <script src="models.js"></script>
+    <script src="auth.js"></script>
     <script src="bedrock.js"></script>
     <script src="app.js"></script>
 </body>

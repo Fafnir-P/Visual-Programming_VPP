@@ -57,8 +57,25 @@ button {
     border: none;
     border-radius: 4px;
     font-size: 14px;
-    margin-left: auto;
 }
+
+#userLabel {
+    margin-left: auto;
+    font-size: 13px;
+    color: #555;
+}
+
+#authBtn {
+    padding: 8px 14px;
+    background: #fff;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+#authBtn[hidden] { display: none; }
+#authBtn:hover { background: #eaf3ff; }
 
 #generateBtn:hover:not(:disabled) { background: #218838; }
 #generateBtn:disabled {
@@ -499,3 +516,21 @@ body.sidebar-open #canvasContainer {
     fill: none;
     pointer-events: none;
 }
+
+/* Model panel scrolls when the hints make it tall */
+#panelModel { overflow-y: auto; }
+
+.route-info { white-space: pre-wrap; padding: 6px 8px; background: #f1f7ff; border-radius: 4px; }
+
+/* Login dialog */
+#loginDialog { width: 380px; }
+#loginTabs { display: flex; margin-bottom: 14px; }
+#loginDialog .form-group input[type="text"],
+#loginDialog .form-group input[type="password"] { width: 100%; }
+.login-error { min-height: 18px; margin-bottom: 4px; font-size: 13px; color: #b00020; }
+
+/* The hidden attribute must win over display rules such as .form-group */
+[hidden] { display: none !important; }
+
+/* Centre dialogs (the reset at the top removes the browser's auto margin) */
+dialog { margin: auto; }

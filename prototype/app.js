@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
     initializeSidebar();
     initBedrockUI();
+    initAuthUI();
     render();
 });
 

@@ -4,27 +4,63 @@
 // This module manages Bedrock API configuration (credentials, region, model)
 // and assembles the Converse API request. It does NOT execute network calls;
 // that responsibility is deferred to a later phase.
+// Model and region data, and the routing rules, live in models.js.
+// The API key lives only in bedrockState.apiKey. When the user is signed in,
+// auth.js also saves it (encrypted) through the main process.
 
 const bedrockState = {
-    apiKey: '',              // Bearer token API key (memory-only, never persisted)
-    region: 'us-east-1',
-    modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+    apiKey: '',
+    region: 'auto',          // 'auto' | 'custom' | region code
+    customRegion: '',
+    modelId: DEFAULT_MODEL_ID,   // catalog id or 'custom'
+    customModel: ''
 };
 
-const REGIONS = [
-    { value: 'us-east-1', label: 'US East (N. Virginia)' },
-    { value: 'us-west-2', label: 'US West (Oregon)' },
-    { value: 'eu-west-1', label: 'EU (Ireland)' },
-    { value: 'custom', label: 'Custom...' }
-];
+function currentBedrockTarget() {
+    return resolveBedrockTarget({
+        region: bedrockState.region,
+        customRegion: bedrockState.customRegion,
+        modelId: bedrockState.modelId,
+        customModel: bedrockState.customModel
+    });
+}
 
-const MODELS = [
-    { value: 'anthropic.claude-3-5-sonnet-20241022-v2:0', label: 'Claude 3.5 Sonnet (Oct 2024)' },
-    { value: 'anthropic.claude-3-5-haiku-20241022-v1:0', label: 'Claude 3.5 Haiku (Oct 2024)' },
-    { value: 'anthropic.claude-3-sonnet-20240229-v1:0', label: 'Claude 3 Sonnet (Feb 2024)' },
-    { value: 'anthropic.claude-3-haiku-20240307-v1:0', label: 'Claude 3 Haiku (Mar 2024)' },
-    { value: 'custom', label: 'Custom model ID...' }
-];
+function addOption(parent, value, text) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    parent.appendChild(opt);
+    return opt;
+}
+
+function populateRegionSelect(select) {
+    select.textContent = '';
+    addOption(select, 'auto', 'Auto (recommended)');
+    REGION_GROUPS.forEach((group) => {
+        const og = document.createElement('optgroup');
+        og.label = group.label;
+        group.regions.forEach((r) => addOption(og, r.value, r.label + ' \u00b7 ' + r.value));
+        select.appendChild(og);
+    });
+    addOption(select, 'custom', 'Other region...');
+    select.value = bedrockState.region;
+}
+
+function populateModelSelect(select) {
+    select.textContent = '';
+    const groups = new Map();
+    MODEL_CATALOG.forEach((m) => {
+        if (!groups.has(m.provider)) {
+            const og = document.createElement('optgroup');
+            og.label = m.provider;
+            groups.set(m.provider, og);
+            select.appendChild(og);
+        }
+        addOption(groups.get(m.provider), m.id, m.label);
+    });
+    addOption(select, 'custom', 'Custom model ID...');
+    select.value = bedrockState.modelId;
+}
 
 function initBedrockUI() {
     const apiKeyInput = document.getElementById('bedrockApiKeyInput');
@@ -33,7 +69,9 @@ function initBedrockUI() {
     const customRegionInput = document.getElementById('customRegionInput');
     const modelSelect = document.getElementById('modelSelect');
     const customModelInput = document.getElementById('customModelInput');
-    const statusLine = document.getElementById('bedrockStatus');
+
+    populateRegionSelect(regionSelect);
+    populateModelSelect(modelSelect);
 
     // API key input
     apiKeyInput.addEventListener('input', (e) => {
@@ -50,49 +88,68 @@ function initBedrockUI() {
 
     // Region select
     regionSelect.addEventListener('change', (e) => {
-        const value = e.target.value;
-        if (value === 'custom') {
-            customRegionInput.hidden = false;
-            customRegionInput.focus();
-            bedrockState.region = customRegionInput.value || 'us-east-1';
-        } else {
-            customRegionInput.hidden = true;
-            bedrockState.region = value;
-        }
+        bedrockState.region = e.target.value;
+        customRegionInput.hidden = bedrockState.region !== 'custom';
+        if (!customRegionInput.hidden) customRegionInput.focus();
+        updateRouteInfo();
     });
 
     customRegionInput.addEventListener('input', (e) => {
-        bedrockState.region = e.target.value || 'us-east-1';
+        bedrockState.customRegion = e.target.value;
+        updateRouteInfo();
     });
 
     // Model select
     modelSelect.addEventListener('change', (e) => {
-        const value = e.target.value;
-        if (value === 'custom') {
-            customModelInput.hidden = false;
-            customModelInput.focus();
-            bedrockState.modelId = customModelInput.value || bedrockState.modelId;
-        } else {
-            customModelInput.hidden = true;
-            bedrockState.modelId = value;
-        }
+        bedrockState.modelId = e.target.value;
+        customModelInput.hidden = bedrockState.modelId !== 'custom';
+        if (!customModelInput.hidden) customModelInput.focus();
+        updateRouteInfo();
     });
 
     customModelInput.addEventListener('input', (e) => {
-        bedrockState.modelId = e.target.value || 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+        bedrockState.customModel = e.target.value;
+        updateRouteInfo();
     });
 
     updateBedrockStatus();
+    updateRouteInfo();
+}
+
+// Shows where the request will go with the current choices.
+function updateRouteInfo() {
+    const info = document.getElementById('routeInfo');
+    if (!info) return;
+    const t = currentBedrockTarget();
+    if (t.error) {
+        info.textContent = t.error;
+        return;
+    }
+    let text = 'Will call: ' + t.region + ' \u00b7 ' + t.modelId;
+    if (t.note) text += '\n' + t.note;
+    info.textContent = text;
 }
 
 function updateBedrockStatus() {
     const statusLine = document.getElementById('bedrockStatus');
+    const hint = document.getElementById('apiKeyHint');
     const hasKey = bedrockState.apiKey.length > 0;
-    statusLine.textContent = `API key: ${hasKey ? 'set' : 'not set'}`;
+    const signedIn = typeof authState !== 'undefined' && !!authState.username;
+    let text = 'API key: ' + (hasKey ? 'set' : 'not set');
+    if (hasKey) text += signedIn ? ' (saved for ' + authState.username + ')' : ' (not saved)';
+    if (typeof authState !== 'undefined' && authState.keyMessage) text += '. ' + authState.keyMessage;
+    statusLine.textContent = text;
+    if (hint) {
+        hint.textContent = signedIn
+            ? 'Saved encrypted on this computer for ' + authState.username + '.'
+            : 'Not signed in: kept in memory only. Sign in to save it.';
+    }
 }
 
 function getBedrockEndpoint() {
-    return `https://bedrock-runtime.${bedrockState.region}.amazonaws.com/model/${encodeURIComponent(bedrockState.modelId)}/converse`;
+    const t = currentBedrockTarget();
+    if (t.error) throw new Error(t.error);
+    return `https://bedrock-runtime.${t.region}.amazonaws.com/model/${encodeURIComponent(t.modelId)}/converse`;
 }
 
 // Serialize the current graph state into the format expected by the prompt.
@@ -131,6 +188,7 @@ function serializeGraph() {
 
 // Assemble a Bedrock Converse API request. Returns the structure but does NOT
 // execute any network call. The caller is responsible for fetch/XHR.
+// Throws if the region or model choice is not valid.
 function assembleBedrockRequest() {
     const graph = serializeGraph();
 

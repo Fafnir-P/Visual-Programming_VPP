@@ -205,3 +205,113 @@ suite was re-run this phase; no card code changed.
 
 **Completion status:** OPEN. Implementation and smoke test pass; the independent
 reviewer approval required by agent.md is missing.
+
+## Task: Login screen, saved API key, more regions, more models
+
+**Goal:** (1) A login screen. Signed in: the Bedrock API key is saved permanently.
+Not signed in: memory only, as before. (2) Explain the small region list; add more
+regions and pick the best one automatically. (3) Support most Bedrock models
+(OpenAI GPT, Claude, Gemini and others); explain every model left out.
+
+**Assumption:** no server exists, so the account is local to this computer. It
+protects nothing online; its job is to decide whether the key is saved.
+
+**Changed files:** `main.js` (accounts, key store, IPC), `preload.js` (new, the only
+bridge: `window.vpAuth`), `prototype/auth.js` (new, login dialog), `prototype/models.js`
+(new, models, regions, routing rules), `prototype/bedrock.js`, `prototype/index.html`,
+`prototype/style.css`, `prototype/app.js` (one line: `initAuthUI()`). Card logic untouched.
+
+**Login design**
+- Startup shows Sign in / Create account / Continue without login.
+- Password: scrypt with a random salt, compared with `timingSafeEqual`. Minimum 8
+  characters. Wrong user and wrong password give the same message and the same delay.
+- The API key is encrypted with Electron `safeStorage` (async API; the sync API is
+  removed in Electron 46) and saved in the app data folder. It is saved when the field
+  loses focus or Enter is pressed, and deleted when the field is emptied.
+- The page cannot read the account files. Only the main window's top page may call the
+  IPC channels. The password hash is never sent to the page.
+- A key typed as a guest is kept and saved to the account on sign-in. Log out clears
+  the field and memory.
+- Not available: password reset (forgotten password = delete `accounts.json` in the
+  app data folder, which also drops saved keys). On Windows the key is protected from
+  other Windows users, not from other programs running as the same user.
+
+**Regions: why three was acceptable, and what changed**
+The region is where the request is sent. It decides which models exist, where data is
+processed, and the price. Three regions were enough to run, so a change was not
+required. Now: 22 regions in 4 groups plus "Other region", default **Auto**.
+Auto uses the model's `global.` profile when it has one (AWS routes to the best
+region), otherwise the first geography profile it has, otherwise `us-east-1`.
+A fixed region uses the matching `us.`/`eu.`/`jp.`/`au.`/`apac.`/`in.` profile.
+The Model tab shows the exact region and model id that will be called.
+Risk: Auto may process data outside your own geography; the tab says so.
+
+**Models: 86 text models in 14 groups** (Claude, OpenAI GPT and gpt-oss, Amazon Nova,
+Llama, Mistral, Qwen, DeepSeek, Gemma, Kimi, MiniMax, GLM, Grok, Nemotron, Palmyra),
+plus Custom model ID. Default: Claude Sonnet 5.5. Legacy models are marked "(Legacy)".
+Source: a third-party list of Bedrock model cards checked 2026-10-10 and updated
+2026-10-24 ([logeshwaran.org](https://www.logeshwaran.org/2026/10/amazon-bedrock-model-ids-list.html)),
+consistent with the AWS blog on [OpenAI models on Bedrock](https://aws.amazon.com/blogs/machine-learning/accessing-openai-gpt-5-6-models-on-amazon-bedrock-from-australia-with-global-cross-region-inference/).
+It is a snapshot. Check against `aws bedrock list-foundation-models` in your region.
+
+**Models not offered, with reasons**
+1. Not on Bedrock:
+   - Google Gemini. Bedrock has only Google's open Gemma models.
+   - "ChatGPT" is an app, not a model. Bedrock's OpenAI models are listed instead.
+2. Extra reasons (needed by the brief):
+   - Already ended or ending: Claude 3 Haiku, Claude Sonnet 4 (ended 2026-10-14), Cohere
+     Command R/R+, Nova Sonic v1, Nova Canvas/Reel. AI21 Jamba ends 2026-11-26, so it
+     was left out. Claude Sonnet 4.5 and Opus 4.1 are Legacy (new accounts may not be
+     able to start them) but are listed because they still work today.
+   - Not usable for the text request this app builds: embeddings, rerank, image, video,
+     speech and audio models (Titan/Nova/Cohere embeddings, Stability, Luma, TwelveLabs,
+     Nova Sonic, Voxtral).
+   - Only on Bedrock's other API ("bedrock-mantle", OpenAI-style, not the Converse API
+     this app builds): Claude Mythos 5, GPT-5.6 Cyber, GPT-5.6 Sol "Daybreak Blue",
+     Gemma 4, Grok 4.3. Add them in the generation phase if wanted.
+3. Missing or new models: use Custom model ID (also accepts an application inference
+   profile ARN).
+
+**Workflow**
+- Plan: subagent spec accepted. Its file paths pointed into its own sandbox and its
+  mention of a "profile ARN" was wrong; the coordinator corrected both.
+- Develop: the coordinator wrote the files (subagents on this harness do not write files).
+- Review 1 (research subagent, read the real files): CHANGES NEEDED, 8 findings. Fixed 2:
+  password fields now clear when switching tabs; IPC accepts only the top page.
+  Rejected 6 with reasons: #1 and #2 (key state is synced by the `input` event, so no
+  desync); #3 (a check inside the preload can be skipped by a hostile page, and
+  `main.js` already limits sizes); #6 (ARNs need `:` and `/`; the id is URL-encoded);
+  #5 and #8 (intended behavior; script order is tested).
+- Own findings while testing: `safeStorage` sync API is deprecated, moved to async;
+  `loadFile` used a relative path, now uses `__dirname`; screenshot showed the
+  "Repeat password" box in Sign-in mode and an off-centre dialog; both fixed in CSS.
+- Review 2: CHANGES NEEDED, one valid point: two quick saves could finish out of order.
+  Added a save queue. Its two minor notes were kept as is (the user check guards
+  against logout during encryption; a failed re-encrypt retries on next load).
+- Review 3: **APPROVED**.
+
+**Tests (run by the coordinator; kept outside the project):**
+- UI suite in jsdom, 88/88: region and model lists, every model resolves, routing rules
+  for auto, fixed, custom region and custom model, request URL, no key in the request,
+  no network calls, full login flow with a stand-in for the main process, guest vs
+  signed-in key saving, log out, wrong password, Esc, source rules, script order.
+- Real Electron run of `main.js` with a temporary data folder, 33/33: only the 7 expected
+  calls are exposed, page has no `require`/`process`, short or odd names and passwords
+  rejected, duplicate names rejected, key stored encrypted (no plaintext in either
+  file), key survives log out and sign in, another account cannot read it, wrong
+  password and unknown user give the same reply, no hash returned, oversized key
+  rejected, three quick saves keep the last, session survives reload, a different page is
+  refused, corrupt account file is kept and renamed.
+- `node --check` passed. Screenshots of the login dialog and Model tab checked by eye.
+
+**Known limits**
+- Model ids and profile prefixes come from one snapshot; not checked against a live
+  account. Claude Haiku 4.5 id (`...-20251001-v1:0`) is not in the source table, which
+  showed "profiles only"; it was filled in from the usual naming and should be verified.
+- For models without a profile, Auto sends to `us-east-1`. Some are only offered in
+  other regions; pick a region if the call fails. A live per-region lookup would fix
+  this and could be added with the generation phase.
+- CSP still blocks all network calls (`connect-src 'self'`), as planned.
+- Not tested: macOS and Linux key storage; a real Bedrock call.
+
+**Completion status:** COMPLETE (review 3 approved, all tests pass).
