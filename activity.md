@@ -315,3 +315,177 @@ It is a snapshot. Check against `aws bedrock list-foundation-models` in your reg
 - Not tested: macOS and Linux key storage; a real Bedrock call.
 
 **Completion status:** COMPLETE (review 3 approved, all tests pass).
+
+## Task: Cards.md (card list, names, categories, one-line functions)
+
+**Goal:** search the web for how tools group their building blocks, then write
+`Cards.md` with: one line per category saying what its cards share; for each of the
+200 cards a clear name, its category, and what it will do. No concrete card content
+and no generation logic in this phase.
+
+**Output:** `Cards.md` at the project root. Contains an intro, a category table (count,
+number range, shared trait), one section per category with a one-line trait and a table
+(No., Name, Category, Group, What it does), and the source links. Card numbers match
+`prototype/catalog.js` (card 001 = `catalog_001`, up to 200). Category sizes are the
+framework's: 30 / 60 / 30 / 25 / 15 / 20 / 10 / 10. Nothing in the app changed.
+
+**Workflow**
+- Plan: research subagent surveyed Retool, n8n, Node-RED, Appsmith, Budibase,
+  Streamlit, Django admin, Zapier. It returned category traits, sub-groups with counts,
+  naming rules and overlap rules. Coordinator changes: replaced its "Mock Data
+  Generators" (connectors) with Result Intake and Local Continuation, to match the
+  framework (connectors prepare payloads, give human instructions, take results in,
+  continue locally); replaced "Permission Checks" with Safety Checks (the app is
+  single-owner); limited exports to CSV and JSON and dropped PDF (framework allows
+  explicit CSV/JSON transfer). One source (Make blog) returned 403 to a script, so it
+  is not cited. The other 9 links opened.
+- Develop: 7 subagents wrote the rows in parallel (UI; Backend; Data; Logic; Triggers;
+  Integrations; AI plus Navigation). They return text only, so the coordinator joined
+  the rows into `Cards.md` with a script.
+- Coordinator fixes before review: renamed or reworded cards 41, 56, 86, 97, 106-111,
+  113, 127, 200 so in-flight list cards and saved-data cards do not overlap; made names
+  Title Case; trimmed the 3-retry detail on 86.
+- Review 1 (research subagent read the file): CHANGES NEEDED. Fixed: 042, 046 (renamed
+  Take Record Range), 057 (Split Text By Separator), 072 (Unpack Sub-Records Into
+  Fields), 096, 103 (Create Or Update Record), 114, 118/119 vs 198/199 (saved table for
+  backup vs records on screen), 137, 143, 150, 151, 157, 160, 187, 189, 197.
+  Kept on purpose: "a person" in connector cards (a human does the outside step);
+  070/071 and 047/099 (different jobs); 024, 030, 152 wording.
+- Review 2: **APPROVED**. (It misquoted two old names in its notes; the file itself
+  was checked by the coordinator.)
+
+**Tests (coordinator script, kept outside the project), 45/45 passed:** 200 rows with
+5 columns, numbers 001-200 without gaps, every category equals `catalog.js` and the
+counts match, names unique, 2-6 words, Title Case, no digits; descriptions 25 words or
+fewer, one sentence, unique; no vendor names, webhooks or code words; timer and
+data-event triggers say "while the app preview is running"; connector cards mention a
+person or the outside step; AI cards say build time, user-supplied or plain local rule;
+loop card is bounded; each category has a section and a one-line trait; links present.
+
+**Candidate gaps for the next revision** (not added, because the framework fixes the
+count at 200 per category, so adding a card means removing one): duplicate a record,
+update many records, delete many records (with a safety check), undo last change,
+progress indicator, tax and discount calculation, barcode display, work queue.
+
+**Known limits**
+- Descriptions are rough ideas, not contracts. Inputs, outputs, ports, settings,
+  templates and tests are not defined; the framework requires them before catalog
+  acceptance.
+- The category sizes are planning numbers in the framework; a few cards in the
+  Backend and Data groups are close in purpose (for example 041/106) and are separated
+  only by "current list" versus "saved records" wording.
+- A few cards may be cut or merged once real contracts are written.
+
+**Completion status:** COMPLETE for this phase (review approved, 45/45 checks pass).
+
+## Task: Cards.md round 2 (add needed cards, independent review, remove duplicates)
+
+**Request:** (1) add the cards that are still needed; 200 is not a hard target.
+(2) run an independent review of `Cards.md` per `agent.md`; delete cards judged
+duplicate and add cards judged needed.
+
+**Result:** `Cards.md` now has **205 cards** (was 200): UI 34, Backend 64, Data 33,
+Logic 22, Triggers 14, Integrations 20, AI 10, Navigation/Output 8. Card numbers are
+working numbers and changed. `prototype/catalog.js` still holds the old 200-card
+blank layout, and the intro of `Cards.md` says so. It was not changed.
+
+**Step 1: added needed cards (211 cards after).** Show Progress While Running,
+Display Barcode From Code, Calculate Tax From Subtotal, Apply Percentage Discount,
+Copy Record (then called Duplicate Record For Editing), Update Field Across Records,
+Delete Multiple Records, Enable Change History Tracking, Restore Previous Record
+Version, Add Record To Priority Queue, Process Next Queued Record. These came from the
+gaps listed in the last round. Written by a developer subagent; merged by script.
+
+**Step 2: three independent reviewers** (fresh research subagents with no knowledge of
+earlier reviews; each read the whole file). Lenses: A duplicates, B coverage by building
+six sample apps (stock tracker, purchase orders, stock-take, equipment check-out,
+supplier directory, dashboard), C fit with the framework (read sections 1-5).
+The coordinator weighed their lists, which disagreed in places.
+
+*Deleted (17):*
+- Calculate Tax From Subtotal, Apply Percentage Discount: too narrow; replaced by two
+  general cards (below). A and B agreed.
+- Unpack Sub-Records Into Fields: jargon, rarely needed (A, B).
+- Route With Default Path: every routing card now has a no-match output (A, B).
+- Store Field Rule With Table: now part of Add Field To Table (A).
+- Sort And Limit Query Results, Count Saved Matching Records: Query cards return a list,
+  and list cards already sort, take a range and count (A, coordinator). Grouped counts
+  of saved data stay in Group And Summarize Saved Data.
+- Check Field Uniqueness: Enforce Unique Field Value covers it (A).
+- Mark Field Required Conditionally: merged into Require Dependent Field (A).
+- Limit Import Size And Count: the platform already checks file size and type at
+  import; import cards now say oversized files are refused (A).
+- Run Once After Delay: merged into Run On A Timer (A).
+- Record Reference Number: merged into Enter Outside Result (A).
+- Download Records As CSV, Download Records As JSON: Export Table cards now cover the
+  whole table, a filtered set, or the records on screen (A).
+- Reverse Record Order: descending sort covers it (B).
+- Add Record To Priority Queue, Process Next Queued Record: C found they clash with the
+  framework's one-event-at-a-time, explicit-order model. Query, sort and Find First
+  Matching Record cover the need. (I had added them in step 1.)
+
+*Moved (3), out of AI into Backend Processing, because they use plain rules, not AI
+(C):* Label Text By Keywords, Calculate Reorder Quantity, Flag Unusual Records. AI
+Capabilities keeps 10 cards after three real AI cards were added.
+
+*Added (11):* Calculate From Two Values (add, subtract, multiply, divide), Change Value
+By Percent, Calculate Percentage Change (B); Merge Two Lists (A, C; the framework needs
+an explicit merge); Reconcile Stale Result (C; framework 5.1 requires stale results to
+be reconciled); Pick Date Range, Set App Title, Define App Settings (B); Draft
+Acceptance Checklist, Explain App In Plain Words, Draft Field Help Text (build-time AI
+cards, replacing the three moved ones).
+
+*Reworded:* Repeat Step Group Fixed Times became Repeat For Each List Item (C: a loop
+over cards in the graph is not allowed; iteration must sit inside one bounded card);
+Retry Failed Step now says only when safe to repeat; routing cards, Filter and Query
+cards (several conditions with AND or OR), Wait cards, Run On A Timer, jargon names
+(Search And Select, Pick Specific Fields, Catch Processing Error) and others.
+
+*Rejected reviewer suggestions, with reasons:*
+- Merge Set Default Value On Error into Set Field Default Value; merge Log Error
+  Details into Flag Record With Error: different jobs.
+- Delete Add Calculated Field: a spreadsheet-style computed field is a common need and
+  also answers B's "show a computed column".
+- Delete Create Or Update Record: needed for re-importing the same file (kept; wording
+  now names the key value).
+- Delete Restore Previous Record Version / Enable Change History Tracking (C): record
+  versions are in the framework (5.1); history is bounded to the last few versions.
+- Delete Take Record Range: after the Sort And Limit removal it is the only way to
+  take the first N records.
+- Move Get Current Date And Time to Triggers: it returns a value; it starts nothing.
+- Add Join Selected Paths: Wait For All Steps To Complete already does it; reworded.
+- Add Store Calculation Result In Field, Show Computed Column, Append To Text Field,
+  Attach Local File Reference, Lock Record, Check File Type, Undo Last Change (UI):
+  covered by Update Existing Record, Add Calculated Field, Combine Multiple Fields,
+  Choose File, or out of launch scope (single owner; file checks done by the platform).
+
+**Re-review (fresh reviewer):** all changes read correctly; numbers, category table and
+traits consistent; AI category fits the rules. It asked for 3 more deletions (Compare
+Two Fields, Enable Or Disable Field, Mark Item Outcome), 1 re-add (Count Saved Matching
+Records) and one wording change. Accepted: the wording change (Check Answer Shape: "with
+simple rules"). Not accepted: the 3 deletions (different jobs: compare any two fields
+vs date-only; read-only vs hidden; status vs history) and the re-add (deleted on
+purpose; grouped counts of saved data remain). Verdict was CHANGES NEEDED (MINOR); the
+remaining items are judgment calls, recorded here, not blockers. A further round was
+not run because it would only repeat the disagreement.
+
+**Tests (coordinator script, kept outside the project), 54/54 passed:** contiguous
+numbers; every card has one of the 8 categories, grouped in order; category table counts
+and number ranges equal the rows; one-line trait under each category; names unique,
+2-6 words, Title Case, no digits, no developer jargon; descriptions one sentence, 25
+words or fewer, unique; no vendor names, webhooks or code; timers and data events say
+"while the app preview is running"; connectors mention a person or the outside step; AI
+cards say build time or a person brings the answer, and none is a plain-rule card; loop
+card is bounded; no queue cards; the 17 removed names are gone and the key added names
+are present; no stale catalog.js claim.
+
+**Known limits**
+- Disagreements between reviewers were settled by the coordinator, listed above.
+  Several close pairs remain (for example Filter Records By Condition and Query Saved
+  Records By Criteria); they differ by list versus saved data.
+- Descriptions are rough ideas, not contracts. Inputs, outputs, ports, settings,
+  templates and tests are still to be written.
+- The blank catalog in the app (`prototype/catalog.js`) is not yet synced to this list.
+
+**Completion status:** COMPLETE for this phase (independent review done, edits applied,
+54/54 checks pass; remaining reviewer disagreements documented).
