@@ -489,3 +489,97 @@ are present; no stale catalog.js claim.
 
 **Completion status:** COMPLETE for this phase (independent review done, edits applied,
 54/54 checks pass; remaining reviewer disagreements documented).
+
+## Task: Python template code for every card in Cards.md
+
+**Request:** from `Cards.md`, add reusable template code for each card. Python only; the
+templates should make the final generated Python easier to finish. No concrete card content and no
+generation features in this phase.
+
+**What was built** (new folder `card_templates/`, plus `tests/`)
+- `runtime.py`: the shared base. `CardError`; `Context` (store, app clock, preview flag, event id,
+  settings); a SQLite `Store` (tables, records, versions, optional change history, archive,
+  unique and linked fields, protected delete, counters, applied-event marker, manual-action outbox,
+  event log, nested transactions); one filter language used both in memory and as SQL; one value
+  cleaner for every field type; safe arithmetic (no `eval`); declarative view nodes for UI cards
+  (never HTML); the `@card` decorator and registry.
+- 205 cards in 35 modules, one module per group in `Cards.md`, folders `ui backend data logic
+  triggers integrations ai output`. Each card is one function with its contract (inputs, settings,
+  outputs, phase, effects, role), at least two examples and one invalid case.
+- `testing.py` runs every card's own cases; `manifest.py` writes `manifest.json` (one contract per
+  card, in card order); `cards_md.py` reads `Cards.md`; `README.md` explains the layout.
+- Tests: `python -m unittest discover -s tests -v`.
+
+**Design choices and why**
+- Standard library only: the framework allows only reviewed dependencies, so none are added.
+- A card imports only `..runtime`; no file system, network, `eval`, `random`, or wall clock. Time
+  comes from `ctx.now()`, so cards are deterministic and testable.
+- UI cards return view nodes with plain data. The framework says the platform renders validated
+  declarative data, so no HTML is produced.
+- Trigger cards call `ctx.require_preview()`. Connector cards only prepare text and data for a
+  person and take a typed result back, using a replay-safe outbox key. AI cards never call AI:
+  build-time cards hold a prompt and check a proposal; human-AI cards build a prompt and check a
+  pasted answer.
+- A card setting without a default is a required setting (`required_config` in the manifest).
+- The engine, scheduling, rendering of views and file access are not here; the README says what
+  the engine must do (wrap an event in `ctx.store.transaction()`, call `apply_once(event_id)`).
+
+**Workflow**
+- Plan: research subagent. Accepted 6 of its 10 flags (event ids, loop bounds, transaction around
+  the outbox, SQL name checks, route outputs, deterministic clock). Corrected its trigger flag, which
+  was backwards, and its "17 packages" split (I used 14).
+- Develop: the coordinator wrote `runtime.py` and a guide with a reference module. Thirteen
+  developer subagents wrote the 35 modules in parallel. They return text only, so the coordinator
+  extracted the files by script, which caught one missing end marker and one package that
+  overwrote another's file. The first run had 100 of 127 loadable cards passing; the coordinator
+  fixed the rest (wrong store API use, 21 wrong examples, `preview` flag placed wrongly, missing
+  invalid cases, a view helper misuse) until all 205 passed.
+- Review 1: seven independent code reviewers split by area. Six read the code; the text-and-lists
+  reviewer could not find `Cards.md` and was re-run. About 60 findings. Fixed (all with tests in
+  `tests/test_review_fixes.py`):
+  - spreadsheet formula injection in three CSV outputs; CSV import without BOM handling, header
+    check and stored-record result;
+  - multi-record update and delete that could half-finish; delete that hid protection errors;
+  - restore-previous-version used the wrong state; Define App Settings was not atomic;
+  - Run When Record Created saw only the very first record; timer ignored missed ticks; Run When
+    Record Changed watched fields without history;
+  - a result counted as stale after any later change; AI answer JSON nesting bomb; dotted fields
+    in prompts; 'Above' approval was 'at or above';
+  - unique rule was case-insensitive in code but not in the index; multichoice `contains`
+    differed between memory and SQL; datetime and time limits were ignored; view prop names such
+    as `dataUrl` slipped through;
+  - Adjust Slider settings shadowed `min` and `max` (now `min_value`, `max_value`); empty tabs and
+    columns; end before start in working days; retry now rolls back a failed attempt; the error
+    handler card now really catches a failing step.
+- Rejected, with reasons: nine claims that did not match the code (savepoint use, `IS NULL`
+  handling, boolean handling in `safe_eval`, transaction depth, test diff tolerance, threshold
+  direction, quoting in the CSV module, a view prop named `item_key`, `None` from Skip Invalid
+  Record, `Retry` side effects now covered by a transaction).
+- Review 2: a fresh reviewer verified the fixes (APPROVED; its read was shallow, so the
+  coordinator relied on the tests) and the re-run text-and-lists reviewer found a real sort bug
+  (mixed numbers and text, blanks first when descending), a template that filled braces twice, and
+  a number pattern that kept a trailing dot. All fixed and tested.
+
+**Tests (run by the coordinator): 77 unit tests pass, and all 205 cards pass their own examples.**
+- The templates and `Cards.md` list the same 205 cards (name, category, group, function name,
+  module path); `manifest.json` is current.
+- Source rules by reading the code: only allowed imports, no `eval`/`open`/network/clock/random,
+  no global state, no module-level mutable data, module docstrings.
+- Behaviour: transactions and nested rollback, history trimming, SQL against in-memory evaluation on
+  22 conditions and 60 random rows, SQL injection through names and values, view rules, decorator
+  rules, trigger refusal outside preview, route cards, CSV round trip, all the review fixes.
+
+**Known limits**
+- Examples were written by the same authors as the code; two rounds of independent review and 77
+  tests lower that risk but do not remove it. A real engine test (cards wired into a flow) comes
+  with the generation phase.
+- Cards are generic building blocks. Typed ports, connection checks, and the graph engine are not
+  written. Some cards need engine help (for example, passing `last_seen_id` back to a trigger).
+- Money and numbers: numbers are stored as floating point; currency fields round half up to 2 places.
+  Exported CSV shows `5.0`, not `5`.
+- No Python packaging yet (`pyproject`), and no copy of these templates into the app UI.
+- Several reviewer suggestions were left as design choices: default limit of 10000 items for lists,
+  tables and charts; "Mark Item Outcome" on a custom table uses plain update, not the outbox.
+
+**Completion status:** COMPLETE for this phase (review rounds done, fixes applied, 77/77 tests and
+205/205 card cases pass).
