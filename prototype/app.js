@@ -9,18 +9,23 @@ const state = {
     selectedEdgeID: null,
     nextNodeID: 1,
     nextEdgeID: 1,
-    edgeDraft: null,  // { startNodeID, startPortID, startPortType, x, y, snapTarget: null|{nodeID, portID, portType} }
+    edgeDraft: null,  // { startNodeID, startPortID, startPortType, startCls, x, y, snapTarget: null|{nodeID, portID, portType}, check: null|result of checkConnection }
     order: [],        // node IDs in run order (explicit user order)
+    messages: [],     // refused links and other notices: { time, level, code, message, details }
     buildConfirmed: false,  // true after user confirms build is complete
     ui: {
         sidebarOpen: true,
         tab: 'catalog',       // 'catalog' | 'order' | 'model'
+        messagesOpen: false,
         category: 'all',      // category id or 'all'
         search: ''
     }
 };
 
 const SNAP_RADIUS = 40;
+const MAX_MESSAGES = 50;
+const PORT_ROW_H = 24;     // height of one port row in a card body (px)
+const PORT_BODY_PAD = 8;   // space above and below the port rows (px)
 
 // ============================================================================
 // INITIALIZATION
@@ -31,6 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSidebar();
     initBedrockUI();
     initAuthUI();
+    initializePortUI();
+    initializeIssuesDialog();
+    addStartCard();
     render();
 });
 
@@ -69,7 +77,18 @@ function addCardFromCatalog(catalogID, x, y) {
     const source = getCatalogCard(catalogID);
     if (!source) return null;
 
+    // There is exactly one Start card (it is on the canvas when the program opens)
+    if (source.role === 'start') {
+        const existing = findStartNode();
+        if (existing) {
+            selectNode(existing.id);
+            reportNotice('one_start', 'There is already a Start card. An app has only one place where it begins.');
+            return null;
+        }
+    }
+
     const id = `node_${state.nextNodeID++}`;
+    // New cards go to the right of the Start card, each a little lower than the last
     const offset = (state.nodes.size * 30) % 240;
 
     const node = {
@@ -77,11 +96,13 @@ function addCardFromCatalog(catalogID, x, y) {
         catalogID: source.id,
         type: source.category,
         title: source.title,
-        x: Math.max(0, x !== undefined ? x : 40 + offset),
+        x: Math.max(0, x !== undefined ? x : 340 + offset),
         y: Math.max(0, y !== undefined ? y : 40 + offset),
+        role: source.role,
+        // Every node gets its own copy of the card's ports (from catalog.js)
         ports: {
-            inputs: [{ id: 'in', name: 'Input' }],
-            outputs: [{ id: 'out', name: 'Output' }]
+            inputs: source.ports.inputs.map(p => Object.assign({}, p)),
+            outputs: source.ports.outputs.map(p => Object.assign({}, p))
         }
     };
 
@@ -91,7 +112,24 @@ function addCardFromCatalog(catalogID, x, y) {
     return node;
 }
 
+function findStartNode() {
+    return Array.from(state.nodes.values()).find(n => n.role === 'start') || null;
+}
+
+// The Start card is on the canvas when the program opens and stays there.
+function addStartCard() {
+    if (findStartNode()) return findStartNode();
+    const source = CATALOG.find(c => c.role === 'start');
+    return source ? addCardFromCatalog(source.id, 40, 40) : null;
+}
+
 function deleteNode(nodeID) {
+    const target = state.nodes.get(nodeID);
+    if (target && target.role === 'start') {
+        reportNotice('start_required', 'The Start card cannot be deleted: every app begins there.');
+        return;
+    }
+
     // Delete all edges connected to this node
     const edgesToDelete = [];
     state.edges.forEach((edge, edgeID) => {
@@ -129,15 +167,28 @@ function mouseToCanvas(event) {
 
 function beginDraft(nodeID, portID, portType, event) {
     const pt = mouseToCanvas(event);
+    const node = state.nodes.get(nodeID);
+    const startPort = findPort(node, portType, portID);
     state.edgeDraft = {
         startNodeID: nodeID,
         startPortID: portID,
         startPortType: portType,
+        startCls: startPort ? startPort.cls : null,
         x: pt.x,
         y: pt.y,
-        snapTarget: null
+        snapTarget: null,
+        check: null
     };
     render();
+}
+
+// The two ends of a link being drawn, in the order checkConnection wants them:
+// the end that should be an output first, then the end that should be an input.
+function draftEnds(draft, target) {
+    // `side` says which side of its card each port is on: the same name may exist on both
+    const start = { nodeID: draft.startNodeID, portID: draft.startPortID, side: draft.startPortType };
+    const other = { nodeID: target.nodeID, portID: target.portID, side: target.portType };
+    return draft.startPortType === 'output' ? { from: start, to: other } : { from: other, to: start };
 }
 
 function updateEdgeDraft(event) {
@@ -147,51 +198,49 @@ function updateEdgeDraft(event) {
     state.edgeDraft.x = pt.x;
     state.edgeDraft.y = pt.y;
 
-    // Find nearest opposite port within snap radius
-    const oppositeType = state.edgeDraft.startPortType === 'output' ? 'input' : 'output';
+    // Nearest port of another card within the snap radius. Ports of every kind count,
+    // so a wrong pick (an output on an output, a mismatched colour) is reported, not ignored.
     let closestPort = null;
     let closestDistance = SNAP_RADIUS;
 
     state.nodes.forEach(node => {
         if (node.id === state.edgeDraft.startNodeID) return; // Skip same node
-        
-        const ports = oppositeType === 'input' ? node.ports.inputs : node.ports.outputs;
-        ports.forEach(port => {
-            const center = getPortCenter(node.id, oppositeType, port.id);
-            if (!center) return;
 
-            const dx = pt.x - center.x;
-            const dy = pt.y - center.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+        [['input', node.ports.inputs], ['output', node.ports.outputs]].forEach(([side, ports]) => {
+            ports.forEach(port => {
+                const center = getPortCenter(node.id, side, port.id);
+                if (!center) return;
 
-            if (dist < closestDistance) {
-                closestDistance = dist;
-                closestPort = {
-                    nodeID: node.id,
-                    portID: port.id,
-                    portType: oppositeType
-                };
-            }
+                const dx = pt.x - center.x;
+                const dy = pt.y - center.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < closestDistance) {
+                    closestDistance = dist;
+                    closestPort = { nodeID: node.id, portID: port.id, portType: side };
+                }
+            });
         });
     });
 
     // Clear previous snap-target styling
-    document.querySelectorAll('.port.snap-target').forEach(el => {
-        el.classList.remove('snap-target');
+    document.querySelectorAll('.port.snap-target, .port.snap-bad').forEach(el => {
+        el.classList.remove('snap-target', 'snap-bad');
     });
 
-    // Update snap target
+    // Update snap target and check it now, so the line can show a mismatch before release
     state.edgeDraft.snapTarget = closestPort;
-
-    // Apply snap-target class to the port DOM element
+    state.edgeDraft.check = null;
     if (closestPort) {
+        const ends = draftEnds(state.edgeDraft, closestPort);
+        state.edgeDraft.check = checkConnection(state.nodes, state.edges, ends.from, ends.to);
         const cardEl = document.querySelector(`[data-node-id="${closestPort.nodeID}"]`);
         if (cardEl) {
             const portEl = cardEl.querySelector(
                 `.port.${closestPort.portType}-port[data-port-id="${closestPort.portID}"]`
             );
             if (portEl) {
-                portEl.classList.add('snap-target');
+                portEl.classList.add(state.edgeDraft.check.ok ? 'snap-target' : 'snap-bad');
             }
         }
     }
@@ -205,59 +254,35 @@ function commitEdge() {
         return;
     }
 
-    const { startNodeID, startPortID, startPortType, snapTarget } = state.edgeDraft;
+    const draft = state.edgeDraft;
+    const ends = draftEnds(draft, draft.snapTarget);
 
-    // Determine output and input sides
-    let fromNodeID, fromPort, toNodeID, toPort;
-    if (startPortType === 'output') {
-        fromNodeID = startNodeID;
-        fromPort = startPortID;
-        toNodeID = snapTarget.nodeID;
-        toPort = snapTarget.portID;
-    } else {
-        fromNodeID = snapTarget.nodeID;
-        fromPort = snapTarget.portID;
-        toNodeID = startNodeID;
-        toPort = startPortID;
-    }
-
-    // Reject self-connection (already prevented by node filter, but double-check)
-    if (fromNodeID === toNodeID) {
+    // One place decides whether the link is allowed (ports.js)
+    const result = checkConnection(state.nodes, state.edges, ends.from, ends.to);
+    if (!result.ok) {
+        const target = draft.snapTarget;
         cancelEdgeDraft();
+        reportConnectionError(result, target);
         return;
     }
 
-    // Check for duplicate edge
-    const isDuplicate = Array.from(state.edges.values()).some(edge =>
-        edge.fromNodeID === fromNodeID &&
-        edge.fromPort === fromPort &&
-        edge.toNodeID === toNodeID &&
-        edge.toPort === toPort
-    );
-
-    if (isDuplicate) {
-        cancelEdgeDraft();
-        return;
-    }
-
-    // Create edge
     const edgeID = `edge_${state.nextEdgeID++}`;
     state.edges.set(edgeID, {
         id: edgeID,
-        fromNodeID: fromNodeID,
-        fromPort: fromPort,
-        toNodeID: toNodeID,
-        toPort: toPort
+        fromNodeID: ends.from.nodeID,
+        fromPort: ends.from.portID,
+        toNodeID: ends.to.nodeID,
+        toPort: ends.to.portID,
+        loose: !!result.loose
     });
 
     cancelEdgeDraft();
     render();
 }
-
 function cancelEdgeDraft() {
-    // Clear snap-target styling
-    document.querySelectorAll('.port.snap-target').forEach(el => {
-        el.classList.remove('snap-target');
+    // Clear snap styling (green for a match, red for a refusal)
+    document.querySelectorAll('.port.snap-target, .port.snap-bad').forEach(el => {
+        el.classList.remove('snap-target', 'snap-bad');
     });
     state.edgeDraft = null;
     render();
@@ -402,6 +427,10 @@ function handleDocumentMouseUp(event) {
 
 function handleKeyDown(event) {
     if (event.key === 'Escape') {
+        if (!document.getElementById('toast').hidden) {
+            hideToast();   // Escape closes a refusal message first
+            return;
+        }
         if (state.edgeDraft) {
             cancelEdgeDraft();
         } else {
@@ -488,59 +517,197 @@ function createCardElement(node) {
     catEl.textContent = cat ? cat.label : '';
     card.appendChild(catEl);
 
-    // Body
+    // Header ports: Start (in) and Done (out) control ports, on every card except triggers
+    const headerPorts = { input: [], output: [] };
+    const listedPorts = { input: [], output: [] };
+    node.ports.inputs.forEach(port => (port.implicit ? headerPorts.input : listedPorts.input).push(port));
+    node.ports.outputs.forEach(port => (port.implicit ? headerPorts.output : listedPorts.output).push(port));
+    headerPorts.input.forEach(port => header.appendChild(createPortElement(node, port, 'input', null)));
+    headerPorts.output.forEach(port => header.appendChild(createPortElement(node, port, 'output', null)));
+
+    // Body: one label per listed port; the coloured dots sit on the card edge, level with the labels
     const body = document.createElement('div');
     body.className = 'card-body';
+    const rows = Math.max(listedPorts.input.length, listedPorts.output.length, 1);
+    body.style.height = `${PORT_BODY_PAD * 2 + rows * PORT_ROW_H}px`;
     card.appendChild(body);
 
-    // Input ports
-    node.ports.inputs.forEach((port, index) => {
-        const portEl = document.createElement('div');
-        portEl.className = 'port input-port';
-        portEl.setAttribute('data-port-id', port.id);
-        portEl.setAttribute('data-port-type', 'input');
-        portEl.setAttribute('title', port.name);
-        portEl.setAttribute('aria-label', port.name);
-        portEl.style.top = `${30 + index * 25}px`;
-
-        if (state.edgeDraft && 
-            state.edgeDraft.startNodeID === node.id && 
-            state.edgeDraft.startPortID === port.id &&
-            state.edgeDraft.startPortType === 'input') {
-            portEl.classList.add('active');
-        }
-
-        portEl.addEventListener('mousedown', (e) => handlePortMouseDown(node.id, port.id, 'input', e));
-
-        body.appendChild(portEl);
-    });
-
-    // Output ports
-    node.ports.outputs.forEach((port, index) => {
-        const portEl = document.createElement('div');
-        portEl.className = 'port output-port';
-        portEl.setAttribute('data-port-id', port.id);
-        portEl.setAttribute('data-port-type', 'output');
-        portEl.setAttribute('title', port.name);
-        portEl.setAttribute('aria-label', port.name);
-        portEl.style.top = `${30 + index * 25}px`;
-
-        if (state.edgeDraft && 
-            state.edgeDraft.startNodeID === node.id && 
-            state.edgeDraft.startPortID === port.id &&
-            state.edgeDraft.startPortType === 'output') {
-            portEl.classList.add('active');
-        }
-
-        portEl.addEventListener('mousedown', (e) => handlePortMouseDown(node.id, port.id, 'output', e));
-
-        body.appendChild(portEl);
+    ['input', 'output'].forEach(side => {
+        const col = document.createElement('div');
+        col.className = `port-labels ${side}-labels`;
+        listedPorts[side].forEach((port, index) => {
+            const label = document.createElement('div');
+            label.className = 'port-label';
+            label.style.color = classInfo(port.cls).color;
+            label.textContent = port.name + (side === 'input' ? (port.multi ? ' +' : (port.optional ? ' ?' : '')) : '');
+            label.setAttribute('title', portTooltip(port, side));
+            col.appendChild(label);
+            body.appendChild(createPortElement(node, port, side, PORT_BODY_PAD + index * PORT_ROW_H + PORT_ROW_H / 2));
+        });
+        body.appendChild(col);
     });
 
     // Card mousedown for drag/select
     card.addEventListener('mousedown', (e) => handleCardMouseDown(node.id, e));
 
     return card;
+}
+
+function portTooltip(port, side) {
+    const info = classInfo(port.cls);
+    let text = `${port.name}: ${info.label} (${info.colourName || ''} ${side})`.replace('  ', ' ');
+    if (side === 'input' && port.multi) text += '. Takes several links.';
+    else if (side === 'input' && port.optional) text += '. Optional.';
+    else if (side === 'input') text += '. Needs a link or a setting.';
+    return text;
+}
+
+// One port dot. topPx places it in the body; null leaves it to the CSS (header ports).
+function createPortElement(node, port, side, topPx) {
+    const portEl = document.createElement('div');
+    portEl.className = `port ${side}-port cls-${port.cls}`;
+    portEl.setAttribute('data-port-id', port.id);
+    portEl.setAttribute('data-port-type', side);
+    portEl.setAttribute('data-port-class', port.cls);
+    portEl.setAttribute('title', portTooltip(port, side));
+    portEl.setAttribute('aria-label', portTooltip(port, side));
+    portEl.style.setProperty('--port-color', classInfo(port.cls).color);
+    if (topPx !== null && topPx !== undefined) portEl.style.top = `${topPx}px`;
+
+    const draft = state.edgeDraft;
+    if (draft) {
+        if (draft.startNodeID === node.id && draft.startPortID === port.id && draft.startPortType === side) {
+            portEl.classList.add('active');
+        } else if (draft.startNodeID !== node.id) {
+            // While a link is dragged: ports it could end on glow, the rest fade
+            const ok = portCanLink(draft.startPortType, draft.startCls, side, port.cls);
+            portEl.classList.add(ok ? 'can-link' : 'cannot-link');
+        }
+    }
+
+    portEl.addEventListener('mousedown', (e) => handlePortMouseDown(node.id, port.id, side, e));
+    return portEl;
+}
+
+// ============================================================================
+// PORT UI: legend, refused-link messages
+// ============================================================================
+
+function initializePortUI() {
+    renderLegend();
+    document.getElementById('messagesToggle').addEventListener('click', () => {
+        state.ui.messagesOpen = !state.ui.messagesOpen;
+        renderMessages();
+    });
+    document.getElementById('messagesClear').addEventListener('click', () => {
+        state.messages = [];
+        renderMessages();
+    });
+    document.getElementById('toastClose').addEventListener('click', hideToast);
+    renderMessages();
+}
+
+function renderLegend() {
+    const legend = document.getElementById('legend');
+    legend.innerHTML = '';
+    const title = document.createElement('span');
+    title.className = 'legend-title';
+    title.textContent = 'Ports: same colour links';
+    legend.appendChild(title);
+    PORT_CLASS_ORDER.forEach(cls => {
+        const info = classInfo(cls);
+        const item = document.createElement('span');
+        item.className = 'legend-item';
+        item.setAttribute('title', info.carries);
+        const dot = document.createElement('span');
+        dot.className = `legend-dot cls-${cls}`;
+        dot.style.setProperty('--port-color', info.color);
+        item.appendChild(dot);
+        item.appendChild(document.createTextNode(info.label));
+        legend.appendChild(item);
+    });
+}
+
+let toastTimer = null;
+
+// kind: 'error' (red, a refused link) or 'notice' (blue, a plain notice)
+function showToast(text, kind) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toastText').textContent = text;
+    toast.className = kind === 'notice' ? 'notice' : '';
+    toast.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 9000);
+}
+
+function hideToast() {
+    document.getElementById('toast').hidden = true;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = null;
+}
+
+// Record a notice in the message list (newest last, at most MAX_MESSAGES kept)
+function addMessage(level, code, message, details) {
+    state.messages.push({ time: new Date().toLocaleTimeString(), level: level, code: code, message: message, details: details || {} });
+    if (state.messages.length > MAX_MESSAGES) state.messages.shift();
+    renderMessages();
+}
+
+// A plain notice (not an error): shown in blue and kept in the message list
+function reportNotice(code, text) {
+    addMessage('notice', code, text, {});
+    showToast(text, 'notice');
+}
+
+// A link was refused: show it clearly, write it to the message list and to the console,
+// and flash the ports involved.
+function reportConnectionError(result, target) {
+    const text = `Link refused (${result.code}): ${result.message}`;
+    console.error('[link refused]', result.code, result.message, result.details);
+    addMessage('error', result.code, result.message, result.details);
+    showToast(text);
+
+    const d = result.details || {};
+    [d.from, d.to].forEach(end => {
+        if (!end || !end.nodeID) return;
+        const cardEl = document.querySelector(`[data-node-id="${end.nodeID}"]`);
+        if (!cardEl) return;
+        const portEl = cardEl.querySelector(`.port[data-port-id="${end.portID}"]`);
+        if (!portEl) return;
+        portEl.classList.add('port-error');
+        setTimeout(() => portEl.classList.remove('port-error'), 1800);
+    });
+}
+
+function renderMessages() {
+    const count = state.messages.length;
+    const toggle = document.getElementById('messagesToggle');
+    toggle.textContent = `Messages (${count})`;
+    toggle.classList.toggle('has-errors', state.messages.some(m => m.level === 'error'));
+    toggle.setAttribute('aria-expanded', String(state.ui.messagesOpen));
+    const panel = document.getElementById('messagesPanel');
+    panel.hidden = !state.ui.messagesOpen;
+    const list = document.getElementById('messagesList');
+    list.innerHTML = '';
+    if (count === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'empty-note';
+        empty.textContent = 'No messages. Refused links and notices are listed here.';
+        list.appendChild(empty);
+        return;
+    }
+    state.messages.slice().reverse().forEach(m => {
+        const li = document.createElement('li');
+        li.className = `message ${m.level}`;
+        const head = document.createElement('div');
+        head.className = 'message-head';
+        head.textContent = `${m.time}  ${m.code}`;
+        const body = document.createElement('div');
+        body.textContent = m.message;
+        li.appendChild(head);
+        li.appendChild(body);
+        list.appendChild(li);
+    });
 }
 
 function renderEdges() {
@@ -605,6 +772,10 @@ function createEdgeLine(edge) {
     line.setAttribute('y2', y2);
     line.setAttribute('class', 'edge');
     line.setAttribute('data-edge-id', edge.id);
+    // The line takes the colour of the output it starts from; a link to or from an Any port is dashed
+    const startPort = findPort(fromNode, 'output', edge.fromPort);
+    if (startPort) line.style.setProperty('--edge-color', classInfo(startPort.cls).color);
+    if (edge.loose) line.classList.add('loose');
 
     if (state.selectedEdgeID === edge.id) {
         line.classList.add('selected');
@@ -663,6 +834,8 @@ function renderEdgeDraft() {
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
     line.setAttribute('class', 'edge-draft');
+    // Red while the port under the cursor would be refused
+    if (state.edgeDraft.check && !state.edgeDraft.check.ok) line.classList.add('invalid');
 
     svg.appendChild(line);
 }
@@ -954,7 +1127,8 @@ function renderStatus() {
     
     // Update Generate button enabled state
     const generateBtn = document.getElementById('generateBtn');
-    generateBtn.disabled = state.nodes.size === 0;
+    // Nothing to generate while only the Start card is on the canvas
+    generateBtn.disabled = !Array.from(state.nodes.values()).some(n => n.role !== 'start');
 }
 
 // ============================================================================
@@ -983,7 +1157,77 @@ function handleCancelDialog() {
     dialog.close();
 }
 
+// Step 1 of generating: the user said the build is complete. If something is missing
+// (inputs with no link, a Start card that leads nowhere, no End card), a second window
+// says where and what, and asks again. Without problems the generation runs at once.
 function handleConfirmGenerate() {
+    document.getElementById('confirmDialog').close();
+    const issues = findGenerationIssues(state.nodes, state.edges, state.order);
+    if (issues.length > 0) {
+        showIssuesDialog(issues);
+        return;
+    }
+    runGeneration();
+}
+
+function initializeIssuesDialog() {
+    document.getElementById('issuesBackBtn').addEventListener('click', () => {
+        document.getElementById('issuesDialog').close();
+    });
+    document.getElementById('issuesGenerateBtn').addEventListener('click', () => {
+        document.getElementById('issuesDialog').close();
+        runGeneration();   // the user has seen what is missing and still wants to generate
+    });
+}
+
+function showIssuesDialog(issues) {
+    const list = document.getElementById('issuesList');
+    list.innerHTML = '';
+    document.getElementById('issuesIntro').textContent =
+        `${issues.length} thing${issues.length !== 1 ? 's are' : ' is'} missing. You can go back and fix ` +
+        `${issues.length !== 1 ? 'them' : 'it'}, or generate anyway.`;
+    issues.forEach(issue => {
+        const li = document.createElement('li');
+        li.className = 'issue';
+        const where = document.createElement('div');
+        where.className = 'issue-where';
+        where.textContent = issue.where;
+        const what = document.createElement('div');
+        what.className = 'issue-what';
+        what.textContent = issue.message;
+        const text = document.createElement('div');
+        text.className = 'issue-text';
+        text.appendChild(where);
+        text.appendChild(what);
+        li.appendChild(text);
+        if (issue.nodeID && state.nodes.has(issue.nodeID)) {
+            const show = document.createElement('button');
+            show.type = 'button';
+            show.className = 'mini-btn';
+            show.textContent = 'Show';
+            show.setAttribute('aria-label', 'Show ' + issue.where + ' on the canvas');
+            show.addEventListener('click', () => {
+                document.getElementById('issuesDialog').close();
+                focusNode(issue.nodeID);
+            });
+            li.appendChild(show);
+        }
+        list.appendChild(li);
+    });
+    document.getElementById('issuesDialog').showModal();
+}
+
+// Select a card and scroll the canvas so that it is in view
+function focusNode(nodeID) {
+    const node = state.nodes.get(nodeID);
+    if (!node) return;
+    selectNode(nodeID);
+    const container = document.getElementById('canvasContainer');
+    container.scrollLeft = Math.max(0, node.x - 60);
+    container.scrollTop = Math.max(0, node.y - 60);
+}
+
+function runGeneration() {
     // Set build confirmed flag
     state.buildConfirmed = true;
     
@@ -995,10 +1239,6 @@ function handleConfirmGenerate() {
         // If assembly fails, show error (shouldn't happen with current implementation)
         alert('Error assembling request: ' + error.message);
     }
-    
-    // Close dialog and update status
-    const dialog = document.getElementById('confirmDialog');
-    dialog.close();
     
     renderStatus();
 }

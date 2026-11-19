@@ -27,7 +27,8 @@ OUTPUT FILE MANIFEST FORMAT: Your response must include:
 EXECUTION ORDER: The cards are provided in explicit run order. Respect this order when generating initialization, event dispatch, and execution flow.
 
 INPUT FORMAT: You will receive a JSON object with:
-- nodes: array of {id, catalogID, title, category, templateCode, config}
+- nodes: array of {id, catalogID, title, category, templateCode, config, ports}
+  ports lists each card's inputs and outputs by id and port class; a link joins ports of the same class
   templateCode is a placeholder (blank in this prototype phase)
   config is an empty object in this prototype phase
 - edges: array of {id, from: {node: nodeID, port: portID}, to: {node: nodeID, port: portID}}

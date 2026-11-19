@@ -72,6 +72,34 @@
         </div>
     </div>
 
+    <div id="legend" aria-label="Port colours"></div>
+
+    <div id="toast" role="alert" hidden>
+        <span id="toastText"></span>
+        <button id="toastClose" type="button" aria-label="Close message">&times;</button>
+    </div>
+
+    <div id="messages">
+        <div id="messagesPanel" hidden>
+            <div class="messages-head">
+                <strong>Messages</strong>
+                <button id="messagesClear" type="button" class="mini-btn">Clear</button>
+            </div>
+            <ul id="messagesList"></ul>
+        </div>
+        <button id="messagesToggle" type="button" aria-expanded="false">Messages (0)</button>
+    </div>
+
+    <dialog id="issuesDialog" aria-labelledby="issuesDialogTitle">
+        <h2 id="issuesDialogTitle">Some things are missing</h2>
+        <p id="issuesIntro" class="hint"></p>
+        <ul id="issuesList"></ul>
+        <div class="dialog-buttons">
+            <button id="issuesBackBtn" type="button">Go back and fix</button>
+            <button id="issuesGenerateBtn" type="button" class="primary-btn">Generate anyway</button>
+        </div>
+    </dialog>
+
     <dialog id="confirmDialog" aria-labelledby="confirmDialogTitle">
         <h2 id="confirmDialogTitle">Confirm build is complete</h2>
         <div id="confirmDialogContent"></div>
@@ -111,6 +139,7 @@
     </dialog>
 
     <script src="catalog.js"></script>
+    <script src="ports.js"></script>
     <script src="prompt.js"></script>
     <script src="models.js"></script>
     <script src="auth.js"></script>

@@ -108,7 +108,7 @@ class EveryCardRuns(unittest.TestCase):
     def test_route_cards_declare_a_no_match_port(self):
         routes = [s for s in REGISTRY.values() if s.role == "route"]
         self.assertGreaterEqual(len(routes), 6)
-        two_way = {"Route By Field Presence", "Route By List Membership", "Route By Date Comparison"}  # every record fits one port
+        two_way = {"Route By Field Presence", "Route By List Membership", "Route By Date Comparison", "Branch On Yes/No"}  # every record fits one port
         for spec in routes:
             if spec.name not in two_way:
                 self.assertIn("no_match", spec.outputs, spec.name)

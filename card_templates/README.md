@@ -1,6 +1,6 @@
 # card_templates
 
-Reusable Python templates for the 205 cards in `Cards.md`. Python 3.13, standard library only.
+Reusable Python templates for the 209 cards in `Cards.md`. Python 3.13, standard library only.
 A later phase copies these into generated projects and writes the glue between cards.
 Nothing here is app-specific: every card is generic and takes its table names, field names and limits as settings.
 
@@ -51,3 +51,17 @@ def pick_date(ctx, *, value=None, name="date", label="Date", required=False) -> 
 
 Ports, the graph engine, scheduling, rendering of view nodes, file access, and the generator itself.
 The engine is expected to wrap each event in `ctx.store.transaction()` and call `ctx.store.apply_once(event_id)`.
+
+## Ports
+
+Every card's ports are the `inputs` and `outputs` of its function. `ports.py` gives each port a class
+(Text, Number, Yes/No, Date/Time, Record, Record List, Value List, View, Control, Any); the class is the colour
+in the app and decides what can be linked. The classes, the rules and the ports of every card are written in
+`Cards.md`. After changing a port, a class or a card, run
+
+    python -m card_templates.ports_export      # rewrites Cards.md and prototype/catalog.js
+    python -m card_templates.manifest          # rewrites manifest.json
+
+`python -m card_templates.ports_export --check` says whether they are out of date; the tests do the same.
+The rules that refuse a link live in `prototype/ports.js`; `tests/ports_logic.test.js` tests them
+(`node tests/ports_logic.test.js`).

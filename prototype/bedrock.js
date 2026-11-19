@@ -163,7 +163,11 @@ function serializeGraph() {
             title: node.title,
             category: node.type,
             templateCode: '',  // Blank placeholder; real content in later phase
-            config: {}
+            config: {},
+            ports: {
+                inputs: node.ports.inputs.filter(p => !p.implicit).map(p => ({ id: p.id, class: p.cls, optional: p.optional, multi: p.multi })),
+                outputs: node.ports.outputs.filter(p => !p.implicit).map(p => ({ id: p.id, class: p.cls }))
+            }
         };
     }).filter(n => n !== null);
 

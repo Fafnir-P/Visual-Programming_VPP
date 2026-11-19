@@ -1,6 +1,8 @@
 """Calculations (Backend Processing). Pure numeric operations on field values and lists."""
 from __future__ import annotations
 
+import math
+
 from ..runtime import (
     CardError, bounded, card, get_field, is_blank, matches, round_half_up,
     to_number, validate_condition,
@@ -107,71 +109,46 @@ def calculate_percentage_of_total(ctx, *, value, total, places: int = 2) -> dict
 
 
 @card(
-    "Find Minimum Value", category=CATEGORY, group=GROUP,
-    inputs=["records"], outputs=["minimum"],
+    "Find Smallest Or Largest Value", category=CATEGORY, group=GROUP,
+    inputs=["records"], outputs=["value"],
     phase="runtime", role="data",
     examples=[
         {"label": "smallest value",
          "args": {"records": [{"price": 5}, {"price": 2}, {"price": 8}], "field": "price"},
-         "expect": {"minimum": 2}},
+         "expect": {"value": 2}},
         {"label": "single record",
          "args": {"records": [{"x": 10}], "field": "x"},
-         "expect": {"minimum": 10}},
+         "expect": {"value": 10}},
         {"label": "skip blank values",
          "args": {"records": [{"x": 5}, {"x": None}, {"x": 3}], "field": "x"},
-         "expect": {"minimum": 3}},
+         "expect": {"value": 3}},
+        {"label": "largest value",
+         "args": {"records": [{"temp": 22}, {"temp": 18}, {"temp": 25}], "field": "temp", "mode": "largest"},
+         "expect": {"value": 25}},
+        {"label": "largest skips blank values",
+         "args": {"records": [{"x": 10}, {"x": None}, {"x": 20}], "field": "x", "mode": "largest"},
+         "expect": {"value": 20}},
     ],
     invalid=[
         {"label": "empty list", "args": {"records": [], "field": "x"}, "code": "invalid_input"},
         {"label": "not a list", "args": {"records": "text", "field": "x"}, "code": "invalid_input"},
+        {"label": "unknown mode", "args": {"records": [{"x": 1}], "field": "x", "mode": "middle"}, "code": "invalid_input"},
     ],
 )
-def find_minimum_value(ctx, *, records, field: str = "value") -> dict:
-    """Identifies the smallest numeric value in a field across a list of records."""
+def find_smallest_or_largest_value(ctx, *, records, field: str = "value", mode: str = "smallest") -> dict:
+    """Finds the smallest or the largest numeric value in a field across a list of records."""
+    if mode not in ("smallest", "largest"):
+        raise CardError("invalid_input", f"Unknown mode: {mode}. Use smallest or largest.")
     if not isinstance(records, list):
-        raise CardError("invalid_input", "Minimum needs a list of records.")
+        raise CardError("invalid_input", f"The {mode} value needs a list of records.")
     values = []
     for rec in bounded(records):
         value = get_field(rec, field)
         if not is_blank(value):
             values.append(to_number(value, field))
     if not values:
-        raise CardError("invalid_input", "Cannot find minimum: no numeric values found.")
-    return {"minimum": min(values)}
-
-
-@card(
-    "Find Maximum Value", category=CATEGORY, group=GROUP,
-    inputs=["records"], outputs=["maximum"],
-    phase="runtime", role="data",
-    examples=[
-        {"label": "largest value",
-         "args": {"records": [{"temp": 22}, {"temp": 18}, {"temp": 25}], "field": "temp"},
-         "expect": {"maximum": 25}},
-        {"label": "single record",
-         "args": {"records": [{"x": 7}], "field": "x"},
-         "expect": {"maximum": 7}},
-        {"label": "skip blank values",
-         "args": {"records": [{"x": 10}, {"x": None}, {"x": 20}], "field": "x"},
-         "expect": {"maximum": 20}},
-    ],
-    invalid=[
-        {"label": "empty list", "args": {"records": [], "field": "x"}, "code": "invalid_input"},
-        {"label": "not a list", "args": {"records": 5, "field": "x"}, "code": "invalid_input"},
-    ],
-)
-def find_maximum_value(ctx, *, records, field: str = "value") -> dict:
-    """Identifies the largest numeric value in a field across a list of records."""
-    if not isinstance(records, list):
-        raise CardError("invalid_input", "Maximum needs a list of records.")
-    values = []
-    for rec in bounded(records):
-        value = get_field(rec, field)
-        if not is_blank(value):
-            values.append(to_number(value, field))
-    if not values:
-        raise CardError("invalid_input", "Cannot find maximum: no numeric values found.")
-    return {"maximum": max(values)}
+        raise CardError("invalid_input", f"Cannot find the {mode} value: no numeric values found.")
+    return {"value": min(values) if mode == "smallest" else max(values)}
 
 
 @card(
@@ -401,3 +378,34 @@ def calculate_percentage_change(ctx, *, old_value, new_value, places: int = 2) -
         raise CardError("divide_by_zero", "Cannot calculate percentage change: old value is zero.")
     change = ((new - old) / old) * 100
     return {"change": round_half_up(change, places)}
+
+
+_COMPARE_OPERATORS = ("eq", "ne", "gt", "gte", "lt", "lte")
+
+
+@card(
+    "Compare Two Numbers", category=CATEGORY, group=GROUP,
+    inputs=["first", "second"], outputs=["result"],
+    phase="runtime", role="data",
+    examples=[
+        {"label": "greater than", "args": {"first": 10, "second": 5, "operator": "gt"}, "expect": {"result": True}},
+        {"label": "not greater when equal", "args": {"first": 5, "second": 5, "operator": "gt"}, "expect": {"result": False}},
+        {"label": "at or below a reorder level", "args": {"first": 8, "second": 10, "operator": "lte"}, "expect": {"result": True}},
+        {"label": "decimals that only look different", "args": {"first": 0.1 + 0.2, "second": 0.3, "operator": "eq"}, "expect": {"result": True}},
+        {"label": "text numbers are read as numbers", "args": {"first": "12", "second": "9.5", "operator": "gte"}, "expect": {"result": True}},
+    ],
+    invalid=[
+        {"label": "unknown operator", "args": {"first": 1, "second": 2, "operator": "between"}, "code": "invalid_input"},
+        {"label": "not a number", "args": {"first": "abc", "second": 2}, "code": "not_a_number"},
+    ],
+)
+def compare_two_numbers(ctx, *, first, second, operator: str = "gt") -> dict:
+    """Answers yes or no to a comparison of two numbers: equal, not equal, greater, greater or equal, less, less or equal."""
+    if operator not in _COMPARE_OPERATORS:
+        raise CardError("invalid_input", f"Operator must be one of: {', '.join(_COMPARE_OPERATORS)}.")
+    a = to_number(first, "first")
+    b = to_number(second, "second")
+    same = math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-9)
+    answer = {"eq": same, "ne": not same, "gt": a > b and not same, "gte": a > b or same,
+              "lt": a < b and not same, "lte": a < b or same}[operator]
+    return {"result": answer}

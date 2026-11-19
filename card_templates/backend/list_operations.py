@@ -9,6 +9,7 @@ from ..runtime import (
     get_field,
     is_blank,
     matches,
+    to_date,
     to_number,
     try_number,
     validate_condition,
@@ -531,3 +532,104 @@ def merge_two_lists(ctx, *, list_a, list_b, remove_duplicates: bool = False, uni
             seen.add(key)
             unique.append(rec)
     return {"records": unique}
+
+
+@card(
+    "Pick Field From Records",
+    category=CATEGORY, group=GROUP,
+    inputs=["records"], outputs=["values"],
+    examples=[
+        {"label": "ids of a list of records",
+         "args": {"records": [{"id": 3, "n": "a"}, {"id": 5, "n": "b"}], "field": "id"},
+         "expect": {"values": [3, 5]}},
+        {"label": "blank values are left out",
+         "args": {"records": [{"sku": "A"}, {"sku": ""}, {"sku": None}, {}, {"sku": "B"}], "field": "sku"},
+         "expect": {"values": ["A", "B"]}},
+        {"label": "blank values kept on request",
+         "args": {"records": [{"sku": "A"}, {}], "field": "sku", "skip_blank": False},
+         "expect": {"values": ["A", None]}},
+        {"label": "repeats removed on request, first one kept",
+         "args": {"records": [{"c": "x"}, {"c": "y"}, {"c": "x"}], "field": "c", "unique": True},
+         "expect": {"values": ["x", "y"]}},
+        {"label": "empty list",
+         "args": {"records": [], "field": "id"},
+         "expect": {"values": []}},
+    ],
+    invalid=[
+        {"label": "records must be a list", "args": {"records": {"id": 1}, "field": "id"}, "code": "invalid_input"},
+        {"label": "a field name is needed", "args": {"records": [], "field": ""}, "code": "invalid_input"},
+    ],
+)
+def pick_field_from_records(ctx, *, records, field: str, skip_blank: bool = True, unique: bool = False) -> dict:
+    """Takes one named field out of every record and gives the values as a list, for example the ids of a list of records."""
+    if not isinstance(records, list):
+        raise CardError("invalid_input", "Records must be a list.")
+    if not isinstance(field, str) or not field.strip():
+        raise CardError("invalid_input", "Say which field to take.")
+    out = []
+    for rec in bounded(records, what="records"):
+        value = get_field(rec, field) if isinstance(rec, dict) else None
+        if skip_blank and is_blank(value):
+            continue
+        if unique and value in out:
+            continue
+        out.append(value)
+    return {"values": out}
+
+
+_DATE_OPERATORS = ("before", "after", "on", "on_or_before", "on_or_after")
+
+
+@card(
+    "Filter Records By Date",
+    category=CATEGORY, group=GROUP,
+    inputs=["records", "compare_date"], outputs=["records"],
+    examples=[
+        {"label": "records due before today (overdue)",
+         "args": {"records": [{"id": 1, "due": "2026-01-10"}, {"id": 2, "due": "2026-01-20"}, {"id": 3, "due": "2026-01-15"}],
+                  "compare_date": "2026-01-15", "field": "due", "operator": "before"},
+         "expect": {"records": [{"id": 1}]}},
+        {"label": "on or after",
+         "args": {"records": [{"id": 1, "due": "2026-01-10"}, {"id": 3, "due": "2026-01-15"}, {"id": 2, "due": "2026-01-20"}],
+                  "compare_date": "2026-01-15", "field": "due", "operator": "on_or_after"},
+         "expect": {"records": [{"id": 3}, {"id": 2}]}},
+        {"label": "a date and time is compared by its day",
+         "args": {"records": [{"id": 1, "at": "2026-01-15T23:59:00"}], "compare_date": "2026-01-15T00:00:00", "field": "at", "operator": "on"},
+         "expect": {"records": [{"id": 1}]}},
+        {"label": "records with no date are dropped by default",
+         "args": {"records": [{"id": 1}, {"id": 2, "due": None}], "compare_date": "2026-01-15", "field": "due", "operator": "before"},
+         "expect": {"records": []}},
+        {"label": "records with no date kept on request",
+         "args": {"records": [{"id": 1}], "compare_date": "2026-01-15", "field": "due", "operator": "before", "keep_blank": True},
+         "expect": {"records": [{"id": 1}]}},
+    ],
+    invalid=[
+        {"label": "a record date that is not a date", "args": {"records": [{"due": "soon"}], "compare_date": "2026-01-15", "field": "due"}, "code": "not_a_date"},
+        {"label": "the compare date is not a date", "args": {"records": [], "compare_date": "x", "field": "due"}, "code": "not_a_date"},
+        {"label": "unknown operator", "args": {"records": [], "compare_date": "2026-01-15", "field": "due", "operator": "near"}, "code": "invalid_input"},
+        {"label": "records must be a list", "args": {"records": "no", "compare_date": "2026-01-15", "field": "due"}, "code": "invalid_input"},
+    ],
+)
+def filter_records_by_date(ctx, *, records, compare_date, field: str, operator: str = "before", keep_blank: bool = False) -> dict:
+    """Keeps the records whose date field is before, after or on a date that arrives while the app runs, such as today."""
+    if not isinstance(records, list):
+        raise CardError("invalid_input", "Records must be a list.")
+    if operator not in _DATE_OPERATORS:
+        raise CardError("invalid_input", f"Operator must be one of: {', '.join(_DATE_OPERATORS)}.")
+    if not isinstance(field, str) or not field.strip():
+        raise CardError("invalid_input", "Say which date field to compare.")
+    limit = to_date(compare_date, "compare_date")
+    keep = {
+        "before": lambda d: d < limit, "after": lambda d: d > limit, "on": lambda d: d == limit,
+        "on_or_before": lambda d: d <= limit, "on_or_after": lambda d: d >= limit,
+    }[operator]
+    out = []
+    for rec in bounded(records, what="records"):
+        raw = get_field(rec, field) if isinstance(rec, dict) else None
+        if is_blank(raw):
+            if keep_blank:
+                out.append(rec)
+            continue
+        if keep(to_date(raw, field)):
+            out.append(rec)
+    return {"records": out}

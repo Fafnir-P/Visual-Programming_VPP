@@ -41,25 +41,25 @@ class Csv(unittest.TestCase):
     def test_import_handles_bom_quotes_newlines_and_converts_types(self):
         ctx = ctx_with("items", self.FIELDS)
         text = '\ufeffname,price\n"Red, Hot",1.5\n"two\nlines",2\n'
-        out = run("Import Records From CSV", ctx, content=text, table="items")
+        out = run("Import Records", ctx, content=text, table="items")
         self.assertEqual(out["count"], 2)
         self.assertEqual([(r["name"], r["price"]) for r in out["records"]], [("Red, Hot", 1.5), ("two\nlines", 2)])
         self.assertIsInstance(ctx.store.get("items", 1)["price"], float)
 
     def test_import_refuses_a_file_with_no_matching_column(self):
         ctx = ctx_with("items", self.FIELDS)
-        self.assertEqual(code_of("Import Records From CSV", ctx, content="a,b\n1,2\n", table="items"), "no_matching_columns")
+        self.assertEqual(code_of("Import Records", ctx, content="a,b\n1,2\n", table="items"), "no_matching_columns")
         self.assertEqual(ctx.store.count("items"), 0)
 
     def test_import_is_all_or_nothing(self):
         ctx = ctx_with("items", self.FIELDS)
-        self.assertEqual(code_of("Import Records From CSV", ctx, content="name,price\nA,1\nB,notnumber\n", table="items"), "not_a_number")
+        self.assertEqual(code_of("Import Records", ctx, content="name,price\nA,1\nB,notnumber\n", table="items"), "not_a_number")
         self.assertEqual(ctx.store.count("items"), 0)
 
     def test_export_blocks_spreadsheet_formulas_and_round_trips(self):
         rows = [{"name": "=HYPERLINK(\"x\")", "price": -5}, {"name": "+1", "price": 2}, {"name": "plain, text", "price": 3}]
         ctx = ctx_with("items", self.FIELDS, rows)
-        out = run("Export Table To CSV", ctx, table="items")
+        out = run("Export Table", ctx, table="items")
         cells = list(csv.DictReader(io.StringIO(out["content"])))
         self.assertEqual(cells[0]["name"], "'=HYPERLINK(\"x\")")
         self.assertEqual(cells[1]["name"], "'+1")
@@ -163,10 +163,10 @@ class CardFixes(unittest.TestCase):
         self.assertEqual(run("Calculate Working Days", start_date="2026-01-05", end_date="2026-01-05")["working_days"], 1)
 
     def test_date_cards_keep_the_shape_of_their_input(self):
-        self.assertEqual(run("Add Time To Date", date="2026-01-31", amount=1, unit="days")["result"], "2026-02-01")
-        self.assertEqual(run("Add Time To Date", date="2026-01-31T10:00:00", amount=1, unit="days")["result"], "2026-02-01T10:00:00")
-        self.assertEqual(run("Add Time To Date", date="2026-02-28", amount=1, unit="days")["result"], "2026-03-01")
-        self.assertEqual(run("Add Time To Date", date="2028-02-28", amount=1, unit="days")["result"], "2028-02-29")
+        self.assertEqual(run("Shift Date By Time", date="2026-01-31", amount=1, unit="days")["result"], "2026-02-01")
+        self.assertEqual(run("Shift Date By Time", date="2026-01-31T10:00:00", amount=1, unit="days")["result"], "2026-02-01T10:00:00")
+        self.assertEqual(run("Shift Date By Time", date="2026-02-28", amount=1, unit="days")["result"], "2026-03-01")
+        self.assertEqual(run("Shift Date By Time", date="2028-02-28", amount=1, unit="days")["result"], "2028-02-29")
 
     def test_approval_is_needed_only_above_the_amount(self):
         for total, expected in ((1000, False), (1000.01, True), (999, False)):

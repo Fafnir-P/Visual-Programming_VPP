@@ -285,3 +285,30 @@ def route_by_list_membership(ctx, *, record, field: str = "value", reference_lis
             return {"route": "in_list", "value": record}
     
     return {"route": "not_in_list", "value": record}
+
+
+@card(
+    "Branch On Yes/No", category=CATEGORY, group=GROUP,
+    inputs=["condition", "value"], outputs=["yes", "no"],
+    role="route",
+    examples=[
+        {"label": "yes sends the value out of the yes port",
+         "args": {"condition": True, "value": {"id": 1}},
+         "expect": {"route": "yes", "value": {"id": 1}}},
+        {"label": "no sends it out of the no port",
+         "args": {"condition": False, "value": 7},
+         "expect": {"route": "no", "value": 7}},
+        {"label": "nothing to pass on: the branch is still chosen",
+         "args": {"condition": True},
+         "expect": {"route": "yes", "value": None}},
+    ],
+    invalid=[
+        {"label": "a text is not a yes or no", "args": {"condition": "yes"}, "code": "invalid_input"},
+        {"label": "a number is not a yes or no", "args": {"condition": 1}, "code": "invalid_input"},
+    ],
+)
+def branch_on_yes_no(ctx, *, condition, value=None) -> dict:
+    """Sends the value out of the yes port when the answer is yes and out of the no port when it is no."""
+    if not isinstance(condition, bool):
+        raise CardError("invalid_input", "Branch On Yes/No needs a yes or no answer.")
+    return {"route": "yes" if condition else "no", "value": value}

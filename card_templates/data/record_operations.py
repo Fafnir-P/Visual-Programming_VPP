@@ -223,7 +223,7 @@ def create_or_update_record(ctx, *, values, table: str = "records", key_field: s
 
 
 @card(
-    "Archive Record", category=CATEGORY, group=GROUP,
+    "Archive Or Restore Record", category=CATEGORY, group=GROUP,
     inputs=["id"], outputs=["record"],
     effects=["writes_store"], idempotent=True,
     examples=[
@@ -237,39 +237,15 @@ def create_or_update_record(ctx, *, values, table: str = "records", key_field: s
          "rows": {"items": [{"name": "Bolt"}]},
          "args": {"id": 1, "table": "items"},
          "expect": {"record": {"id": 1, "_archived": True}}},
-    ],
-    invalid=[
-        {"label": "record not found",
-         "tables": {"items": [{"name": "name", "type": "text"}]},
-         "args": {"id": 99, "table": "items"}, "code": "not_found"},
-        {"label": "table does not exist",
-         "args": {"id": 1, "table": "missing"}, "code": "no_such_table"},
-    ],
-)
-def archive_record(ctx, *, id, table: str = "records") -> dict:
-    """Moves a record to inactive status without deleting it so it can be restored later."""
-    try:
-        rec_id = int(id)
-    except (TypeError, ValueError):
-        raise CardError("invalid_input", "ID must be a number.") from None
-    record = ctx.store.set_archived(table, rec_id, True)
-    return {"record": record}
-
-
-@card(
-    "Restore Archived Record", category=CATEGORY, group=GROUP,
-    inputs=["id"], outputs=["record"],
-    effects=["writes_store"], idempotent=True,
-    examples=[
         {"label": "restore archived record",
          "tables": {"items": [{"name": "name", "type": "text"}]},
          "rows": {"items": [{"name": "Bolt"}]},
-         "args": {"id": 1, "table": "items"},
+         "args": {"id": 1, "table": "items", "action": "restore"},
          "expect": {"record": {"id": 1, "name": "Bolt", "_archived": False}}},
         {"label": "restoring active record is idempotent",
          "tables": {"items": [{"name": "name", "type": "text"}]},
          "rows": {"items": [{"name": "Bolt"}]},
-         "args": {"id": 1, "table": "items"},
+         "args": {"id": 1, "table": "items", "action": "restore"},
          "expect": {"record": {"id": 1, "_archived": False}}},
     ],
     invalid=[
@@ -278,15 +254,20 @@ def archive_record(ctx, *, id, table: str = "records") -> dict:
          "args": {"id": 99, "table": "items"}, "code": "not_found"},
         {"label": "table does not exist",
          "args": {"id": 1, "table": "missing"}, "code": "no_such_table"},
+        {"label": "unknown action",
+         "tables": {"items": [{"name": "name", "type": "text"}]},
+         "args": {"id": 1, "table": "items", "action": "burn"}, "code": "invalid_input"},
     ],
 )
-def restore_archived_record(ctx, *, id, table: str = "records") -> dict:
-    """Returns an archived record to active status in the table."""
+def archive_or_restore_record(ctx, *, id, table: str = "records", action: str = "archive") -> dict:
+    """Moves a record to inactive status without deleting it, or returns an archived record to active status."""
+    if action not in ("archive", "restore"):
+        raise CardError("invalid_input", f"Unknown action: {action}. Use archive or restore.")
     try:
         rec_id = int(id)
     except (TypeError, ValueError):
         raise CardError("invalid_input", "ID must be a number.") from None
-    record = ctx.store.set_archived(table, rec_id, False)
+    record = ctx.store.set_archived(table, rec_id, action == "archive")
     return {"record": record}
 
 

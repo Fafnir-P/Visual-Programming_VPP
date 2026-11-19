@@ -1193,7 +1193,7 @@ CATEGORIES = ("UI / Interface", "Backend Processing", "Data Modeling / Storage",
               "Triggers / Orchestration", "Integrations / Connectors", "AI Capabilities", "Navigation / Output")
 PHASES = ("generation", "runtime", "human")
 EFFECTS = ("reads_store", "writes_store", "outbox", "view", "file_text_in", "file_text_out")
-ROLES = ("data", "view", "trigger", "flow", "route")
+ROLES = ("data", "view", "trigger", "flow", "route", "start", "end")
 
 
 @dataclasses.dataclass
@@ -1239,7 +1239,8 @@ def card(name: str, *, category: str, group: str, inputs: Iterable[str], outputs
     outputs  names of the keys the function returns (route cards: the port names)
     phase    generation | runtime | human
     effects  reads_store writes_store outbox view file_text_in file_text_out
-    role     data | view | trigger | flow | route
+    role     data | view | trigger | flow | route | start | end
+             (start = where the app begins, end = where it finishes; the only role that may have no outputs is end)
     examples [{"label","args","expect", optional "tables","rows","expect_rows","now","preview","event_id"}]
     invalid  [{"label","args","code", optional "tables","rows","now","preview"}]
     """
@@ -1269,7 +1270,8 @@ def card(name: str, *, category: str, group: str, inputs: Iterable[str], outputs
         config_params = [p for p in rest if p.name not in input_names]
         output_names = tuple(outputs)
         if not output_names:
-            raise ValueError(f"{name}: outputs must not be empty")
+            if role != "end":
+                raise ValueError(f"{name}: outputs must not be empty")
         ex, inv = list(examples), list(invalid)
         if not ex:
             raise ValueError(f"{name}: at least one example is required")

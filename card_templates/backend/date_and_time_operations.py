@@ -57,7 +57,7 @@ def calculate_date_difference(ctx, *, start_date, end_date, unit: str = "days") 
 
 
 @card(
-    "Add Time To Date", category=CATEGORY, group=GROUP,
+    "Shift Date By Time", category=CATEGORY, group=GROUP,
     inputs=["date"], outputs=["result"],
     phase="runtime", role="data",
     examples=[
@@ -70,63 +70,32 @@ def calculate_date_difference(ctx, *, start_date, end_date, unit: str = "days") 
         {"label": "add minutes",
          "args": {"date": "2026-01-15T09:30:00", "amount": 45, "unit": "minutes"},
          "expect": {"result": "2026-01-15T10:15:00"}},
+        {"label": "subtract days",
+         "args": {"date": "2026-01-15", "amount": 5, "unit": "days", "direction": "backward"},
+         "expect": {"result": "2026-01-10"}},
+        {"label": "subtract hours",
+         "args": {"date": "2026-01-15T14:00:00", "amount": 2, "unit": "hours", "direction": "backward"},
+         "expect": {"result": "2026-01-15T12:00:00"}},
+        {"label": "subtract minutes",
+         "args": {"date": "2026-01-15T10:30:00", "amount": 45, "unit": "minutes", "direction": "backward"},
+         "expect": {"result": "2026-01-15T09:45:00"}},
     ],
     invalid=[
         {"label": "not a date", "args": {"date": "invalid", "amount": 5}, "code": "not_a_date"},
         {"label": "not a number", "args": {"date": "2026-01-15", "amount": "x"}, "code": "not_a_number"},
+        {"label": "unknown direction", "args": {"date": "2026-01-15", "amount": 1, "direction": "sideways"}, "code": "invalid_input"},
     ],
 )
-def add_time_to_date(ctx, *, date, amount, unit: str = "days") -> dict:
-    """Advances a date forward by a specified number of days, hours, or minutes."""
+def shift_date_by_time(ctx, *, date, amount, unit: str = "days", direction: str = "forward") -> dict:
+    """Moves a date forward or backward by a number of days, hours, or minutes."""
+    if direction not in ("forward", "backward"):
+        raise CardError("invalid_input", f"Unknown direction: {direction}. Use forward or backward.")
     d = to_datetime(date, "date")
     amt = to_number(amount, "amount")
-    if unit == "days":
-        result = d + dt.timedelta(days=amt)
-    elif unit == "hours":
-        result = d + dt.timedelta(hours=amt)
-    elif unit == "minutes":
-        result = d + dt.timedelta(minutes=amt)
-    elif unit == "seconds":
-        result = d + dt.timedelta(seconds=amt)
-    else:
+    if unit not in ("days", "hours", "minutes", "seconds"):
         raise CardError("invalid_input", f"Unknown unit: {unit}. Use days, hours, minutes or seconds.")
-    return {"result": _same_shape(date, result)}
-
-
-@card(
-    "Subtract Time From Date", category=CATEGORY, group=GROUP,
-    inputs=["date"], outputs=["result"],
-    phase="runtime", role="data",
-    examples=[
-        {"label": "subtract days",
-         "args": {"date": "2026-01-15", "amount": 5, "unit": "days"},
-         "expect": {"result": "2026-01-10"}},
-        {"label": "subtract hours",
-         "args": {"date": "2026-01-15T14:00:00", "amount": 2, "unit": "hours"},
-         "expect": {"result": "2026-01-15T12:00:00"}},
-        {"label": "subtract minutes",
-         "args": {"date": "2026-01-15T10:30:00", "amount": 45, "unit": "minutes"},
-         "expect": {"result": "2026-01-15T09:45:00"}},
-    ],
-    invalid=[
-        {"label": "not a date", "args": {"date": "bad", "amount": 3}, "code": "not_a_date"},
-        {"label": "not a number", "args": {"date": "2026-01-15", "amount": "text"}, "code": "not_a_number"},
-    ],
-)
-def subtract_time_from_date(ctx, *, date, amount, unit: str = "days") -> dict:
-    """Moves a date backward by a specified number of days, hours, or minutes."""
-    d = to_datetime(date, "date")
-    amt = to_number(amount, "amount")
-    if unit == "days":
-        result = d - dt.timedelta(days=amt)
-    elif unit == "hours":
-        result = d - dt.timedelta(hours=amt)
-    elif unit == "minutes":
-        result = d - dt.timedelta(minutes=amt)
-    elif unit == "seconds":
-        result = d - dt.timedelta(seconds=amt)
-    else:
-        raise CardError("invalid_input", f"Unknown unit: {unit}. Use days, hours, minutes or seconds.")
+    delta = dt.timedelta(**{unit: amt})
+    result = d + delta if direction == "forward" else d - delta
     return {"result": _same_shape(date, result)}
 
 

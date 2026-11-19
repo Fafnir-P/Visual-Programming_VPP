@@ -583,3 +583,127 @@ generation features in this phase.
 
 **Completion status:** COMPLETE for this phase (review rounds done, fixes applied, 77/77 tests and
 205/205 card cases pass).
+
+## Task: card ports, colours, connection rules, and the link check in the app
+
+**Request:** (1) in `Cards.md`, give every card its input and output ports and the connection rules,
+allowing several inputs or outputs; (2) in `Cards.md`, group ports into a few big classes, one colour per class,
+compatible ports share a colour, and the colour says only what can be linked; (3) in the main program, one
+general check when cards are linked: a mismatch gives a clear error message and error output; the port classes
+are loaded into the program in advance. No concrete card content and no generation features.
+
+**Design**
+- Ports are the `inputs` and `outputs` of each card's template function, so the card list, the Python code and
+  the app share one source (`card_templates/ports.py`). `ports.py` only adds the class of each port.
+- Ten classes, one colour each: Text (green), Number (blue), Yes/No (yellow), Date/Time (orange), Record (purple),
+  Record List (brown), Value List (teal), View (red), Control (black), Any (grey, striped wildcard).
+- Compatible = same class, or one side is Any. No silent conversions (framework: reject implicit conversion). So a colour
+  is exactly "what it can link to".
+- Rules (error codes in order): `no_such_port`, `direction`, `same_card`, `type_mismatch`, `duplicate`, `input_taken`
+  (one link per input; an input marked + takes several, used for the `children` of layout cards and the `steps` and
+  `branches` of flow cards), `cycle` (framework: reject loops).
+- Every card except triggers also has a black Start input and Done output (not listed per card). Triggers have a
+  black `event` output; their yes/no `fire` is data. This follows the framework's split between data links and control links.
+- Optional inputs (`?`) come from the function signature. An unlinked required input does not block anything; the Generate
+  dialog lists them (a value can be typed into the card's settings instead).
+- The app now loads the 205 cards of `Cards.md` with their ports: `prototype/catalog.js` is generated from `Cards.md`
+  and the templates (`python -m card_templates.ports_export`). This replaces the 200 blank cards, because ports
+  mean nothing without the real cards. Run order, dragging, selecting and the Order tab are unchanged.
+
+**What changed**
+- `card_templates/ports.py` (classes, rules for compatibility, port class of every name and per-card settings),
+  `card_templates/ports_export.py` (writes `Cards.md` port sections and `prototype/catalog.js`),
+  `card_templates/manifest.py` (manifest now lists ports).
+- `Cards.md`: new "Port classes (colours)" and "Connection rules" sections (with examples and what a refused link does),
+  and Inputs / Outputs columns for every card.
+- `prototype/catalog.js` (generated: classes, compatibility table, 205 cards with ports), `prototype/ports.js`
+  (the link check, open-input finder, re-check of saved links), `prototype/app.js` (draws ports with class colour and
+  labels, glows ports that can take the link being dragged, turns the line and port red on a mismatch, refuses the link,
+  red message, message list, console output), `index.html`, `style.css`, `bedrock.js` and `prompt.js`
+  (the graph sent to the model lists each card's ports by class).
+- On a refused link: nothing is created; a red message names both ports, both classes and the rule; both ports flash;
+  the message is kept in a list (bottom right, last 50) and written with `console.error('[link refused]', code, text, details)`.
+
+**Workflow**
+- Plan: coordinator design, checked against the framework (data links versus control links; one input, one source).
+- Develop: the coordinator wrote all code (subagents on this harness return text only).
+- A shell command of mine was blocked by a safety rule that matched on the text of the script (no ssh was used). I did not
+  re-spell it; the same edit was made with the file-edit tools.
+- Found while testing: a port name can exist on both sides of one card (for example an input and an output both called
+  `value`), so the check now receives which side each end is on.
+- Review 1 (five independent reviewers): ports of cards 001-100 and 101-205 against the template code (no wrong class found;
+  one finding for card 163 was a misreading, the port is already Number); app code (fixed: the red "refused" mark stayed after a
+  cancelled drag; Escape now closes the red message; other points were already true or only comments); Cards.md text (fixed: added the
+  `no_such_port` rule, examples of allowed and refused links, what a refused link does, the Any class and the Start/Done/event
+  explanation, colour names; not taken: "refuse to generate while inputs are open", which the app does not do);
+  builder test (six small apps).
+- Review 2: APPROVED. It checked every rule and example sentence against the code.
+
+**Tests (run by the coordinator)**
+- Python, 98 tests: classes and colours, rule, every card's ports match the template and the signature, no stale
+  overrides, manifest, `Cards.md` and `catalog.js` match what the generator makes, JavaScript and Python agree on all class pairs.
+- `node tests/ports_logic.test.js`, 1191 checks: the rule on every class pair; the 205 cards' ports; every refusal code
+  with the real cards; several links on one input; loops through data and through Start/Done; Any; `side` on same-named ports;
+  all output-input pairs of different cards against the colour rule; open inputs; re-check of saved links.
+- Interface test with a simulated page (kept in scratch, needs jsdom), 62 checks: ports drawn in class colours with labels;
+  Start and Done in the header; a good link; a mismatch seen while dragging (red line, red ring, glow and fade); the red message,
+  console output, message list and count; direction, taken input, duplicate, loop refusals; several links; Escape; dashed line
+  for Any; the Generate dialog; clearing messages; no inline script.
+- A screenshot of the real window was checked by eye (cards with coloured ports, a refused link, the message and the list).
+
+**Known limits and gaps found by the "builder" reviewer (not done; they need new cards or a different class design)**
+- No card turns a Yes/No into a start signal or chooses a branch from it ("if yes, run this"), so a flag such as
+  `requires_approval` cannot start a branch. Candidate: a Branch On Yes/No card.
+- Several wiring gaps: Read File Content (Choose File gives only a file name, Import needs the text), Extract Field From
+  Records (Record List to Value List, for ids), Build Summary Record (several numbers to one record, for a summary table),
+  Update Single Field (Calculate Stock Level gives a number, Update Existing Record wants a record), Build Record From Fields
+  has no inputs, Repeat For Each List Item gives an untyped (Any) result, and dates cannot be compared with a record's date in
+  a Query or Filter at run time.
+- The reviewer also proposed merging Value List into Record List, adding a File class, removing Start/Done, and letting
+  Number link to Text. I did not do these: the request is for strict, colour-matched types, and Start/Done is the
+  framework's control link. They are worth discussing with the gaps above.
+- The cards' ports are the inputs of the template functions. A few settings that are really data (for example a field name in
+  Update Field Across Records) show as ports because the template takes them as inputs.
+- The interface test is not in the project (it needs jsdom). `tests/ports_logic.test.js` and the Python tests are.
+- Saved projects do not exist yet; `recheckAllLinks` is ready for when they load.
+
+**Completion status:** COMPLETE for this phase (review rounds done, fixes applied, all checks pass).
+
+## Generate check dialog, bridge cards, Start and End cards
+
+**Request:** (1) Generate must ask again, with where and what, about required inputs not linked, then still generate if confirmed. (2) Add the bridge cards with ports. (3) Keep Value List and Record List separate; add Start and End cards; a Start card exists by default.
+
+**Done:**
+- Generate: the "build complete" dialog is followed by a new issues dialog (card name, position in run order, message, Show button; "Go back and fix" / "Generate anyway"). It never blocks. Issues come from `findGenerationIssues` in `prototype/ports.js`: no Start, Start unlinked, no End, open required input.
+- 9 new cards (214 total): Branch On Yes/No, Compare Two Numbers, Pick Field From Records, Filter Records By Date, Build Summary Record, Set Field Of Record, Read Chosen File, App Start, App End. Templates in `card_templates/`, rows in `Cards.md`, regenerated `prototype/catalog.js` and manifest.
+- Start/End roles have no implicit `_start`/`_done` ports. A Start card is created on load, cannot be deleted, and only one is allowed. Notices use a blue toast.
+- Value List and Record List stay separate.
+
+**Tests:** Python 120 OK; `tests/ports_logic.test.js` 1272 pass; ports_export --check OK; jsdom UI test 98 pass (lives in scratch, not in the project).
+
+**Not done / known limits:** no separate independent review round and no real-window screenshot for this phase; Cards.md intro text does not yet describe Start/End; "Run At App Start" overlaps App Start; Repeat For Each results are still Any.
+
+**Completion status:** PARTIAL (code and tests complete; review and screenshot pending).
+
+## Duplicate-card review and merge; Cards.md sync
+
+**Request:** Continue the review and merge duplicate cards where possible; keep Cards.md in step with all card work.
+
+**Workflow:** Two reviewers searched all 214 cards for duplicates. I checked their picks against the code. Merged 5 pairs, where only a setting differs and the ports match. A third reviewer then checked the result: APPROVED, no leftover old names, safety limits kept (`csv_safe_cell`, size and row limits, `bounded`).
+
+**Merged (214 -> 209 cards):**
+- Find Minimum Value + Find Maximum Value -> Find Smallest Or Largest Value (`mode`, output `value`)
+- Add Time To Date + Subtract Time From Date -> Shift Date By Time (`direction`)
+- Archive Record + Restore Archived Record -> Archive Or Restore Record (`action`)
+- Import Records From CSV + From JSON -> Import Records (`format`)
+- Export Table To CSV + To JSON -> Export Table (`format`)
+
+**Not merged, with reasons:** Run When Record Created/Changed/Deleted (different outputs: before/after, last_seen_id); Build Order Request/Shipment Notice/Supplier Message (different record shapes and rules); Route By ... cards (different output ports); Reject Future Date (no past counterpart exists).
+
+**Files:** card templates in `card_templates/{backend,data}/`, `card_templates/ports.py`, `ports_export.py` (Cards.md rules text now covers App Start/App End and the Generate check), `README.md`, `manifest.json`, `Cards.md` (rows, counts, ports), `prototype/catalog.js`, and the tests that named old cards (`tests/*`).
+
+**Tests:** Python 120 OK; `tests/ports_logic.test.js` 1247 pass (fewer cards, fewer checks); 209/209 card templates pass; ports_export --check OK.
+
+**Known limits:** the real-window screenshot is still not taken; "Run At App Start" overlaps App Start. Old saved projects do not exist yet, so no migration is needed.
+
+**Completion status:** COMPLETE.
