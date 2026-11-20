@@ -1,0 +1,51 @@
+{
+  "run1": {
+    "input_tokens_est": 762,
+    "output_tokens_est": 190,
+    "attempts": 1,
+    "repairs": 0,
+    "model_step_seconds": 4.440043,
+    "local_run_ms": 47.6,
+    "checks": {
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": true
+    }
+  },
+  "run2": {
+    "input_tokens_est": 762,
+    "output_tokens_est": 251,
+    "attempts": 1,
+    "repairs": 0,
+    "model_step_seconds": 4.77433,
+    "local_run_ms": 49.6,
+    "checks": {
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": true
+    }
+  },
+  "big": {
+    "input_tokens_est": 830,
+    "output_tokens_est": 691,
+    "attempts": 1,
+    "repairs": 0,
+    "model_step_seconds": 10.031449,
+    "local_run_ms": 49.9,
+    "checks": {
+      "B1": true,
+      "B2": true,
+      "B3": true,
+      "B4": true
+    }
+  },
+  "task1_medians": {
+    "input_tokens_est": 762.0,
+    "output_tokens_est": 220.5,
+    "model_step_seconds": 4.6071865,
+    "local_run_ms": 48.6
+  },
+  "notes": "tokens = ceil(chars/4); input = prompt.txt + fixed 600 allowance for system context. model_step_seconds = Get-Date T0..T1 around the write step, includes tool-call overhead, not pure generation. median of 2 runs = mean. local_run_ms includes Python start-up."
+}

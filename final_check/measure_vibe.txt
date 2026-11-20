@@ -1,0 +1,11 @@
+MEASURE B - vibeCoding baseline (Order line helper)
+Files: final_check\vibe_way\prompt.txt, main.py, check.ps1
+
+Attempts: 1, repairs: 0
+T0 2026-11-19T17:50:17.27-08:00, T1 2026-11-19T17:50:21.93-08:00 -> model step 4.66 s
+Input tokens (est): prompt 795 chars -> 199, + 600 system allowance = 799
+Output tokens (est): main.py 1162 chars -> 291
+Accounting: estimate (chars/4) + 600 system allowance
+Local run: 1040 ms for one run (includes Windows python process start via Start-Process)
+Checks: C1 pass, C2 pass (exit 1, stderr "error: customer name is empty", no stdout), C3 pass (identical), C4 pass (exit 1, "error: qty must be a number, got 'abc'")
+Caveats: model time is wall-clock between two timestamps, includes tool latency, not pure generation. Token counts are estimates, not tokenizer counts. Only the 4 checklist cases were run; no other edge cases tested.

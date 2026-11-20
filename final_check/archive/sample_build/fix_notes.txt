@@ -1,0 +1,21 @@
+FIX NOTES (round 1)
+Files changed: prototype/prompt.js, prototype/bedrock.js, tests/request.test.js
+Unchanged: card_templates/templates_export.py, prototype/templates.js, tests/test_templates_export.py (no generator change needed; --check passes)
+
+1. prompt.js: new "HOW TEMPLATES ARE CALLED" block: from card_templates.runtime import Context, Store; ctx = Context(store=Store()); fn(ctx, **inputs_and_settings) returns dict by output port id; edges wired by passing source output as target input keyword.
+2. prompt.js: "Target Python 3.8+" replaced by 3.10+ (stated twice: "Target Python 3.10+" and "Python 3.10+ only").
+3. prompt.js: "template code placeholder" line now "A real Python template function". request.test.js: asserts no "placeholder" / "blank in this prototype" in the prompt.
+4. prompt.js: OUTPUT FORMAT block: "=== FILE: <path> ===" ... "=== END FILE ===" and "=== GAP: <card> | <missing> ===". bedrock.js: parseGenerationReply(text) -> {files:[{path,content}], gaps:[{card,missing}]}. Refused paths (.., absolute, drive letter, leading backslash) and unclosed blocks are not returned as files; each adds a gap with card "(reply)". request.test.js: tests for normal, gap-only, 5 bad paths, unclosed block.
+5. prompt.js: Enter/Choose/Toggle/Slider with unlinked value read --<config name> from the command line (argparse) with the config default; no link and no default -> GAP.
+6. prompt.js: one line: App Start event starts the run; App End finish receives the last card's control output; neither is a function call.
+7. request.test.js: test nodes now carry role; findGenerationIssues is called (finds Start/End; start_unlinked only expected with open inputs).
+Problem 6 (bloat) not in the fix list; not changed.
+
+TEST COUNTS (all pass)
+ python -m unittest discover -s tests : 123 tests OK
+ node tests\ports_logic.test.js : 1247 passed, 0 failed
+ node tests\request.test.js : 29 passed, 0 failed (was 21 checks before this round plus new ones)
+ python -m card_templates.testing : 209 of 209 cards pass
+ python -m card_templates.ports_export --check : exit 0
+ python -m card_templates.templates_export --check : exit 0
+Not checked: real model output following the new format; Python 3.10 itself (ran on the local Python only).

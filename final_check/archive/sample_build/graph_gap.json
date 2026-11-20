@@ -1,0 +1,344 @@
+{
+  "nodes": [
+    {
+      "id": "n1",
+      "catalogID": "catalog_156",
+      "title": "App Start",
+      "category": "trigger",
+      "templateCode": "def app_start(ctx, *, description: str='App starts') -> dict:\n    ctx.require_preview()\n    if not isinstance(description, str):\n        raise CardError('invalid_input', 'The note must be text.')\n    now = iso(ctx.now())\n    return {'event': {'kind': 'app_start', 'at': now, 'description': description}, 'started_at': now}",
+      "config": {
+        "description": "App starts"
+      },
+      "runtimeNames": [
+        "CardError",
+        "iso"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "event",
+            "class": "control"
+          },
+          {
+            "id": "started_at",
+            "class": "date"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n2",
+      "catalogID": "catalog_003",
+      "title": "Enter Number",
+      "category": "ui",
+      "templateCode": "def enter_number(ctx, *, value=None, name: str='number', label: str='Number', required: bool=False, min_value=None, max_value=None, placeholder: str='', help_text: str='') -> dict:\n    spec = {'type': 'number', 'required': required, 'min': min_value, 'max': max_value}\n    clean = coerce_value(spec, value, label)\n    node = view('input.number', id=name, label=label, value=clean, required=required, min=min_value, max=max_value, placeholder=placeholder, help=help_text)\n    return {'view': node, 'value': clean}",
+      "config": {
+        "name": "number",
+        "label": "Number",
+        "required": false,
+        "min_value": null,
+        "max_value": null,
+        "placeholder": "",
+        "help_text": ""
+      },
+      "runtimeNames": [
+        "coerce_value",
+        "view"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "value",
+            "class": "number",
+            "optional": true,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "view",
+            "class": "view"
+          },
+          {
+            "id": "value",
+            "class": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n3",
+      "catalogID": "catalog_003",
+      "title": "Enter Number",
+      "category": "ui",
+      "templateCode": "def enter_number(ctx, *, value=None, name: str='number', label: str='Number', required: bool=False, min_value=None, max_value=None, placeholder: str='', help_text: str='') -> dict:\n    spec = {'type': 'number', 'required': required, 'min': min_value, 'max': max_value}\n    clean = coerce_value(spec, value, label)\n    node = view('input.number', id=name, label=label, value=clean, required=required, min=min_value, max=max_value, placeholder=placeholder, help=help_text)\n    return {'view': node, 'value': clean}",
+      "config": {
+        "name": "number",
+        "label": "Number",
+        "required": false,
+        "min_value": null,
+        "max_value": null,
+        "placeholder": "",
+        "help_text": ""
+      },
+      "runtimeNames": [
+        "coerce_value",
+        "view"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "value",
+            "class": "number",
+            "optional": true,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "view",
+            "class": "view"
+          },
+          {
+            "id": "value",
+            "class": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n4",
+      "catalogID": "catalog_064",
+      "title": "Calculate From Two Values",
+      "category": "backend",
+      "templateCode": "def calculate_from_two_values(ctx, *, first, second, operation: str='add', places: int=2) -> dict:\n    a = to_number(first, 'first')\n    b = to_number(second, 'second')\n    if operation == 'add':\n        result = a + b\n    elif operation == 'subtract':\n        result = a - b\n    elif operation == 'multiply':\n        result = a * b\n    elif operation == 'divide':\n        if b == 0:\n            raise CardError('divide_by_zero', 'Cannot divide by zero.')\n        result = a / b\n    else:\n        raise CardError('invalid_input', f'Unknown operation: {operation}. Use add, subtract, multiply or divide.')\n    return {'result': round_half_up(result, places)}",
+      "config": {
+        "operation": "add",
+        "places": 2
+      },
+      "runtimeNames": [
+        "CardError",
+        "round_half_up",
+        "to_number"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "first",
+            "class": "number",
+            "optional": false,
+            "multi": false
+          },
+          {
+            "id": "second",
+            "class": "number",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "result",
+            "class": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n5",
+      "catalogID": "catalog_137",
+      "title": "Validate Number Range",
+      "category": "logic",
+      "templateCode": "def validate_number_range(ctx, *, value, field: str='value', min: float | None=None, max: float | None=None) -> dict:\n    spec = {'type': 'number', 'required': True, 'min': min, 'max': max}\n    clean = coerce_value(spec, value, field)\n    return {'value': clean}",
+      "config": {
+        "field": "value",
+        "min": null,
+        "max": null
+      },
+      "runtimeNames": [
+        "coerce_value"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "value",
+            "class": "number",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "value",
+            "class": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n6",
+      "catalogID": "catalog_036",
+      "title": "Format Currency Value",
+      "category": "backend",
+      "templateCode": "def format_currency_value(ctx, *, value, symbol: str='$', separator: str=',', decimals: int=2) -> dict:\n    num = round_half_up(to_number(value, 'value'), decimals)\n    sign = '-' if num < 0 else ''\n    num = abs(num)\n    parts = f'{num:.{decimals}f}'.split('.')\n    whole = parts[0]\n    if separator:\n        whole = f'{int(whole):,}'.replace(',', separator)\n    text = f'{sign}{symbol}{whole}.{parts[1]}'\n    return {'text': text}",
+      "config": {
+        "symbol": "$",
+        "separator": ",",
+        "decimals": 2
+      },
+      "runtimeNames": [
+        "round_half_up",
+        "to_number"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "value",
+            "class": "number",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "text",
+            "class": "text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n7",
+      "catalogID": "catalog_033",
+      "title": "Show Message Banner",
+      "category": "ui",
+      "templateCode": "def show_message_banner(ctx, *, message, variant: str='info', dismissible: bool=True, icon: str='') -> dict:\n    if not isinstance(message, str):\n        message = str(message)\n    if not message.strip():\n        raise CardError('required', 'Banner needs a message.')\n    if variant not in ('success', 'info', 'warning', 'error'):\n        variant = 'info'\n    node = view('display.banner', message=message, variant=variant, dismissible=dismissible, icon=icon)\n    return {'view': node}",
+      "config": {
+        "variant": "info",
+        "dismissible": true,
+        "icon": ""
+      },
+      "runtimeNames": [
+        "CardError",
+        "view"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "message",
+            "class": "text",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "view",
+            "class": "view"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n8",
+      "catalogID": "catalog_157",
+      "title": "App End",
+      "category": "trigger",
+      "templateCode": "def app_end(ctx, *, finish, message: str='The app has finished') -> dict:\n    if finish is None:\n        raise CardError('invalid_input', 'Nothing has reached the end.')\n    if not isinstance(message, str):\n        raise CardError('invalid_input', 'The message must be text.')\n    ctx.store.log_event('app_end', message, {'at': iso(ctx.now())})\n    return {}",
+      "config": {
+        "message": "The app has finished"
+      },
+      "runtimeNames": [
+        "CardError",
+        "iso"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "finish",
+            "class": "control",
+            "optional": false,
+            "multi": true
+          }
+        ],
+        "outputs": []
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": {
+        "node": "n2",
+        "port": "value"
+      },
+      "to": {
+        "node": "n4",
+        "port": "first"
+      }
+    },
+    {
+      "id": "e3",
+      "from": {
+        "node": "n4",
+        "port": "result"
+      },
+      "to": {
+        "node": "n5",
+        "port": "value"
+      }
+    },
+    {
+      "id": "e4",
+      "from": {
+        "node": "n5",
+        "port": "value"
+      },
+      "to": {
+        "node": "n6",
+        "port": "value"
+      }
+    },
+    {
+      "id": "e5",
+      "from": {
+        "node": "n6",
+        "port": "text"
+      },
+      "to": {
+        "node": "n7",
+        "port": "message"
+      }
+    },
+    {
+      "id": "e6",
+      "from": {
+        "node": "n1",
+        "port": "event"
+      },
+      "to": {
+        "node": "n8",
+        "port": "finish"
+      }
+    }
+  ],
+  "order": [
+    "n1",
+    "n2",
+    "n3",
+    "n4",
+    "n5",
+    "n6",
+    "n7",
+    "n8"
+  ]
+}

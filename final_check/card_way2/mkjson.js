@@ -1,0 +1,6 @@
+const fs=require('fs');const a=require('./result.json');const b=require('./result20.json');
+const j={measurer:'C',pythonVersion:'3.13.7',orderline:{timingMs:Object.fromEntries(Object.entries(a.timing).map(([k,v])=>[k,{min:v.min,median:v.median,max:v.max}])),checks:Object.fromEntries(Object.entries(a.checks).map(([k,v])=>[k,v.pass])),unitTest_test_orderline:'5 OK',fileSizes:a.fileSizes,meterSummary:a.meterSummary,modelTokensEstimate:{input:0,output:0,accounting:'estimate'}},
+modelPathFallback:a.modelPath,card23:{cards:b.cards,allLinksOk:b.allLinksOk,compileOk:b.compileOk,gaps:b.gaps,fileSizes:b.fileSizes,equivalentHandWrittenEstTokens_label:'estimate of equivalent hand-written output (chars/4)',equivalentHandWrittenEstTokens:b.equivalentHandWrittenEstTokens,buildMs:b.buildDeterministicFilesMs,pythonRunMs:b.pythonRunMs,runOk:b.run_ok,runRepeatIdentical:JSON.stringify(b.run_ok)===JSON.stringify(b.run_repeat),badNumber:b.run_badnum,missingFlags:b.run_missing_flag,modelPathIfUsed:b.modelPathIfUsed},
+notMeasured:['user task completion time (drag/link/configure)','real Bedrock latency','real token counts','Electron UI']};
+fs.writeFileSync(require('path').join(__dirname,'..','measure2_card.json'),JSON.stringify(j,null,2));
+

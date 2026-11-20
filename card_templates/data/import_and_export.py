@@ -10,13 +10,20 @@ from ..runtime import (
     MAX_IMPORT_BYTES,
     MAX_IMPORT_ROWS,
     CardError,
-    bounded,
     card,
     validate_against,
 )
 
 CATEGORY = "Data Modeling / Storage"
 GROUP = "Import and Export"
+
+
+def _plain_filename(filename: str) -> str:
+    """A plain file name: no folder, no drive, no NUL. Returns it trimmed or raises ``bad_filename``."""
+    name = filename.strip()
+    if not name or any(ch in name for ch in "/\\:\x00") or name in (".", ".."):
+        raise CardError("bad_filename", "The file name must be a plain name, with no folder.")
+    return name
 
 
 @card(
@@ -116,7 +123,7 @@ def import_records(ctx, *, content: str, table: str, format: str = "csv", has_he
             raise CardError("too_many_rows", f"Too many rows: {len(rows)} (limit {MAX_IMPORT_ROWS}).")
         records = [{k: v for k, v in row.items() if k in field_specs} for row in rows]
 
-    stored = ctx.store.insert_many(table, bounded(records, MAX_IMPORT_ROWS, "records"))
+    stored = ctx.store.insert_many(table, records, MAX_IMPORT_ROWS)
 
     return {"count": len(stored), "records": stored}
 
@@ -175,6 +182,10 @@ def export_table(ctx, *, table: str, records: list | None = None, filename: str 
 
     if not records:
         records = []
+    if filename is not None:
+        if not isinstance(filename, str):
+            raise CardError("invalid_input", "The file name must be text.")
+        filename = _plain_filename(filename)
 
     if format == "json":
         content = json.dumps(records, indent=2 if pretty else None, ensure_ascii=False)
@@ -251,9 +262,18 @@ def load_sample_data_set(ctx, *, table: str, sample_data: list | None = None) ->
                     record[fname] = f"2026-01-{(i + 1):02d}"
                 elif ftype == "email":
                     record[fname] = f"user{i + 1}@example.com"
+                elif ftype == "phone":
+                    record[fname] = "555-0100"
+                elif ftype == "time":
+                    record[fname] = f"{9 + i:02d}:00"
+                elif ftype == "datetime":
+                    record[fname] = f"2026-01-{(i + 1):02d}T09:00:00"
+                elif ftype in ("choice", "multichoice") and field.get("choices"):
+                    first = field["choices"][0]
+                    record[fname] = [first] if ftype == "multichoice" else first
             records.append(record)
     
-    stored = ctx.store.insert_many(table, bounded(records, MAX_IMPORT_ROWS, "records"))
+    stored = ctx.store.insert_many(table, records, MAX_IMPORT_ROWS)
 
     return {"count": len(stored), "records": stored}
 
@@ -294,9 +314,7 @@ def read_chosen_file(ctx, *, filename, content, allowed_types: list | None = Non
         raise CardError("no_file", "No file has been chosen yet.")
     if not isinstance(filename, str) or not isinstance(content, str):
         raise CardError("invalid_input", "The file name and the file text must be text.")
-    name = filename.strip()
-    if not name or any(ch in name for ch in "/\\:\x00") or name in (".", ".."):
-        raise CardError("bad_filename", "The file name must be a plain name, with no folder.")
+    name = _plain_filename(filename)
     types = [t.lower() for t in (allowed_types if allowed_types is not None else _FILE_TYPES)]
     if not any(name.lower().endswith(t) for t in types):
         raise CardError("file_type_not_allowed", f"Only these file types are allowed: {', '.join(types)}.", {"allowed": types})

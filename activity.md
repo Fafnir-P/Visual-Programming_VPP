@@ -707,3 +707,48 @@ are loaded into the program in advance. No concrete card content and no generati
 **Known limits:** the real-window screenshot is still not taken; "Run At App Start" overlaps App Start. Old saved projects do not exist yet, so no migration is needed.
 
 **Completion status:** COMPLETE.
+
+## Cards wired into Generate; small build tests with own model access
+
+**Request:** (1) Connect the cards to the main program. (2) Build-test with my own API; keep the program small.
+**Assumption:** "own API" = the agent's own model access. No Bedrock key was read or used; no network call; no credits spent.
+
+**Workflow (conductor + separate worker chats):** developer -> independent tester (build 1) -> developer fix -> different tester and reviewer (build 2) -> developer fix. Each step was accepted by the file check and my own test re-run.
+
+**Done:**
+- `card_templates/templates_export.py` writes `prototype/templates.js` (209 cards: function source, settings with defaults, ports, runtime names, imports, helpers). `--check` guards it.
+- `prototype/bedrock.js`: the Generate request now carries real `templateCode` and config defaults, only for cards on the canvas; whole-request size cap; `parseGenerationReply` reads the model reply (`=== FILE ===` / `=== GAP ===`) with safe-path checks. `prototype/prompt.js`: new rules (how templates are called, Python 3.10+, reply format, input flags, Start/End, sys.path, output).
+- Build 1 (`final_check/archive/sample_build/`): 8 cards, 14.4 KB request, ran, printed $19.75, gap reported. Found 8 defects; fixed.
+- Build 2 (`final_check/archive/sample_build2/`): 7 cards, 12.7 KB request, parsed, ran twice with the same output, gap reported. Review found 4 cards with missing names/imports, a missing `card_templates` path rule, loose parser; fixed in round 2.
+
+**Tests:** unittest 125 OK; ports_logic 1247; request.test.js 64; card templates 209/209; ports_export and templates_export --check OK. A new test checks all 209 templates for undefined names.
+
+**Known limits:** a real model reply was not tested (my own ability stood in); Python 3.10 itself not run (3.13 only); `parseGenerationReply` has no writer yet and the app does not send the request (no network phase); repeated cards repeat their template code; two Enter Number cards share a config name; `final_check/archive/sample_build2/undef_check.py` reads an old snapshot and is stale (the unit test replaces it); screenshot check still pending; Run At App Start overlaps App Start.
+
+**Completion status:** COMPLETE for this request.
+
+## Final check, fixes, and token/time measurement
+
+**Request:** final check of the whole program; fix what needs improving; measure tokens and time of generating software against the framework targets (section 2 and 7: below 75% of a vibeCoding baseline, 50% ideal, 20% for card-heavy programs).
+
+**Workflow:** conductor with separate worker chats. Independent audit (report only) -> developer fixes -> measurement by independent workers (card way and vibeCoding way did not see each other's files) -> developer fix for the gap the measurement showed -> re-measurement -> small fix -> final test run by me. Each item accepted by the file check and my own test re-run.
+
+**Audit (final_check/audit_report.txt):** 0 HIGH, 2 MED, 13 LOW; all 15 fixed (final_check/audit_fix_notes.txt). MED: Backspace on a select deleted a card; Search Text For Pattern hung on a nested-quantifier regex. LOW: import row limit, input guards in 5 cards, safe_eval errors, working-days cap, export filename check, sample data types, login lockout, register race, will-navigate, index name clash, READMEs, scratch folders moved to final_check/archive.
+
+**Measurement 1 (estimates, chars/4), task "Order line helper", 10 cards:** card way 1840 in + 855 out tokens, 13.3 s, 2 attempts; vibeCoding 799 in + 291 out, 4.7 s, 1 attempt. Target NOT met (about 247% of baseline tokens). Causes: the model still wrote glue; card settings could not be edited; request and prompt were large.
+
+**Fix:** settings panel (node config goes into the request); `prototype/compile.js` `compileMainPy` writes main.py itself, so a graph the app supports needs 0 model tokens; the model is used only when the compiler reports a gap; slimmer request (about 986 input tokens on the model path, from 1840); prompt 2753 -> 1955 chars; meter (`prototype/meter.js`) and a token estimate in the confirm dialog; missing command-line values now name the flag (exit 1, one line).
+
+**Measurement 2:**
+- Card way, order line (11 cards): 0 model tokens, app work about 0.7 ms (median of 5), checks C1-C4 pass. Model path (with a gap): about 1013 estimated input tokens.
+- Card way, 23-card graph: compiles with no gap, output correct, 0 model tokens; the equivalent hand-written code is about 2151 estimated tokens.
+- vibeCoding, order line, 2 fresh runs: median about 982 tokens total, about 4.6 s, 1 attempt each. vibeCoding, 20-card-size task: 830 in + 691 out, 10 s.
+- On these tasks the card way is below the 20% bar for tokens (0 model tokens) when the graph is fully supported.
+
+**Limits (do not claim target met):** all token numbers are estimates; the framework says missing real usage prevents ratio claims. Task completion time (user drags, links and configures cards) was not measured, so the time target is not proven. No real Bedrock reply or latency; no study with participants (framework section 7 needs 96 runs). Graphs were written by hand, not through the UI. Same machine, 1-5 samples. The model path still sends the whole slim graph, not only the gap cards.
+
+**Tests (final run):** unittest 154 OK; ports_logic 1247; request 84; meter 17; main_pure 12; settings 65; card templates 209/209; ports_export and templates_export --check OK.
+
+**Open / parked:** real-window screenshot not taken; Electron UI (settings panel, confirm text, lockout, register race, will-navigate) not run in a window; Run At App Start overlaps App Start; the framework text still says 200 cards while the catalog has 209; Python 3.10 itself not run (3.13 only); sending the request and writing files to disk are later phases.
+
+**Completion status:** COMPLETE for the checks and fixes; the efficiency targets are indicative only, not proven.

@@ -1,0 +1,211 @@
+{
+  "timing": {
+    "serializeGraph": {
+      "min": 0.0803,
+      "median": 0.0877,
+      "max": 0.3154,
+      "all": [
+        0.3154,
+        0.0838,
+        0.0983,
+        0.0803,
+        0.0877
+      ]
+    },
+    "compileMainPy": {
+      "min": 0.1089,
+      "median": 0.1168,
+      "max": 0.7183,
+      "all": [
+        0.7183,
+        0.1187,
+        0.116,
+        0.1089,
+        0.1168
+      ]
+    },
+    "buildDeterministicFiles": {
+      "min": 0.0842,
+      "median": 0.0909,
+      "max": 0.7708,
+      "all": [
+        0.7708,
+        0.0909,
+        0.099,
+        0.0842,
+        0.0852
+      ]
+    },
+    "writeProject": {
+      "min": 0.5139,
+      "median": 0.5638,
+      "max": 0.6157,
+      "all": [
+        0.5236,
+        0.5638,
+        0.6157,
+        0.5139,
+        0.6036
+      ]
+    },
+    "copyCardTemplates_not_part_of_app": {
+      "min": 37.9419,
+      "median": 40.0099,
+      "max": 45.5692,
+      "all": [
+        45.5692,
+        40.0099,
+        40.8226,
+        37.9419,
+        39.1461
+      ]
+    },
+    "pythonC1": {
+      "min": 108.826,
+      "median": 115.2927,
+      "max": 119.0564,
+      "all": [
+        119.0564,
+        116.7603,
+        112.4646,
+        108.826,
+        115.2927
+      ]
+    }
+  },
+  "runs": [
+    {
+      "run": 1,
+      "dir": "run1_eHVpvR",
+      "serializeGraph": 0.3154,
+      "compileMainPy": 0.7183,
+      "buildDeterministicFiles": 0.7708,
+      "writeProject": 0.5236,
+      "copyCardTemplates_not_part_of_app": 45.5692,
+      "pythonC1": 119.0564,
+      "c1code": 0,
+      "c1stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\"}",
+      "compiledOk": true
+    },
+    {
+      "run": 2,
+      "dir": "run2_UtsDcp",
+      "serializeGraph": 0.0838,
+      "compileMainPy": 0.1187,
+      "buildDeterministicFiles": 0.0909,
+      "writeProject": 0.5638,
+      "copyCardTemplates_not_part_of_app": 40.0099,
+      "pythonC1": 116.7603,
+      "c1code": 0,
+      "c1stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\"}",
+      "compiledOk": true
+    },
+    {
+      "run": 3,
+      "dir": "run3_2KP61Q",
+      "serializeGraph": 0.0983,
+      "compileMainPy": 0.116,
+      "buildDeterministicFiles": 0.099,
+      "writeProject": 0.6157,
+      "copyCardTemplates_not_part_of_app": 40.8226,
+      "pythonC1": 112.4646,
+      "c1code": 0,
+      "c1stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\"}",
+      "compiledOk": true
+    },
+    {
+      "run": 4,
+      "dir": "run4_vQilBz",
+      "serializeGraph": 0.0803,
+      "compileMainPy": 0.1089,
+      "buildDeterministicFiles": 0.0842,
+      "writeProject": 0.5139,
+      "copyCardTemplates_not_part_of_app": 37.9419,
+      "pythonC1": 108.826,
+      "c1code": 0,
+      "c1stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\"}",
+      "compiledOk": true
+    },
+    {
+      "run": 5,
+      "dir": "run5_QS4DXt",
+      "serializeGraph": 0.0877,
+      "compileMainPy": 0.1168,
+      "buildDeterministicFiles": 0.0852,
+      "writeProject": 0.6036,
+      "copyCardTemplates_not_part_of_app": 39.1461,
+      "pythonC1": 115.2927,
+      "c1code": 0,
+      "c1stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\"}",
+      "compiledOk": true
+    }
+  ],
+  "checks": {
+    "C1": {
+      "pass": true,
+      "code": 0,
+      "stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\"}",
+      "stderr": ""
+    },
+    "C2": {
+      "pass": true,
+      "code": 1,
+      "stdout": "",
+      "stderr": "customer is required."
+    },
+    "C3": {
+      "pass": true,
+      "stdout_a": "{\"customer\": \"Bob\", \"total\": \"$2.50\"}",
+      "stdout_b": "{\"customer\": \"Bob\", \"total\": \"$2.50\"}"
+    },
+    "C4": {
+      "pass": true,
+      "code": 1,
+      "stdout": "",
+      "stderr": "Qty must be a number."
+    }
+  },
+  "fileSizes": {
+    "cards.py": {
+      "bytes": 3881,
+      "lines": 87
+    },
+    "main.py": {
+      "bytes": 1966,
+      "lines": 38
+    }
+  },
+  "meterSummary": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalTokens": 0,
+    "waitMs": null,
+    "accounting": "estimate",
+    "note": "assembled by the app"
+  },
+  "meterBuiltOk": true,
+  "modelPath": {
+    "buildOk": false,
+    "gaps": [
+      {
+        "card": "Enter Number (n7)",
+        "missing": "the name \"number\" is already used by Enter Number (n6); give each card its own name",
+        "nodeIDs": [
+          "n7"
+        ]
+      }
+    ],
+    "requestBodyBytes": 4588,
+    "estInputTokens": 1013,
+    "systemPromptChars": 1955,
+    "graphChars": 2093,
+    "maxTokensReserved": 4096,
+    "buildProjectFiles": {
+      "gaps": [],
+      "files": [
+        "cards.py",
+        "main.py"
+      ]
+    }
+  }
+}

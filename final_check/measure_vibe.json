@@ -1,0 +1,1 @@
+{"input_tokens_est":799,"output_tokens_est":291,"attempts":1,"repairs":0,"model_step_seconds":[4.66],"local_run_ms":1040,"checks":{"C1":"pass","C2":"pass","C3":"pass","C4":"pass"},"accounting":"estimate (chars/4) + 600 system allowance"}

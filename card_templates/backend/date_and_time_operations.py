@@ -160,11 +160,16 @@ def calculate_working_days(ctx, *, start_date, end_date, holidays: list[str] | N
     if holidays:
         for h in holidays:
             holiday_set.add(to_date(h, "holiday").isoformat())
+    max_days = 36_600   # shortcut: about 100 years, counted day by day; use arithmetic if longer spans are needed
+    if (end - start).days > max_days:
+        raise CardError("limit_exceeded", f"The date range is too long (limit {max_days} days).")
     count = 0
     current = start
-    while current <= end:
+    while True:
         if current.weekday() < 5 and current.isoformat() not in holiday_set:
             count += 1
+        if current >= end:   # stop before adding a day, which fails on the last day of year 9999
+            break
         current += dt.timedelta(days=1)
     return {"working_days": count}
 

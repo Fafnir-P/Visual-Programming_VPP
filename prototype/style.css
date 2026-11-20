@@ -751,3 +751,28 @@ body.sidebar-open #legend { left: calc(var(--sidebar-w) + 8px); }
 .issue-text { flex: 1; min-width: 0; }
 .issue-where { font-weight: 700; color: #333; }
 .issue-what { color: #555; line-height: 1.4; }
+
+/* Settings panel: shown when one card is selected */
+#settingsPanel {
+    position: fixed;
+    top: calc(var(--toolbar-h) + 8px);
+    right: 8px;
+    z-index: 650;
+    width: 260px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid #c8c8c8;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: 13px;
+}
+#settingsPanel[hidden] { display: none; }
+#settingsPanel h2 { margin: 0 0 6px; font-size: 14px; }
+#settingsPanel .setting { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+#settingsPanel .setting.check { flex-direction: row; align-items: center; gap: 6px; }
+#settingsPanel input[type="text"], #settingsPanel input[type="number"], #settingsPanel select { width: 100%; box-sizing: border-box; }
+#settingsPanel input:focus-visible, #settingsPanel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#settingsPanel .setting-note { min-height: 1em; color: #b00020; font-size: 12px; }
+#settingsPanel .setting-note.hint-note { color: #555; }

@@ -1,0 +1,36 @@
+{
+  "task": "Order line helper",
+  "spec": {
+    "run": "main.py --customer \"  ada lovelace \" --qty 3 --price 2.5",
+    "stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\"}",
+    "blank_customer": "exit 1, one-line stderr, no stdout",
+    "same_input_twice": "identical output",
+    "bad_number": "--qty abc: exit 1, one-line stderr"
+  },
+  "order": ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9", "n10", "n11"],
+  "nodes": [
+    {"id": "n1", "title": "App Start"},
+    {"id": "n2", "title": "Enter Text", "config": {"name": "customer", "label": "Customer"}},
+    {"id": "n3", "title": "Trim Whitespace"},
+    {"id": "n4", "title": "Change Text Case", "config": {"case": "title"}},
+    {"id": "n5", "title": "Check Field Is Required", "config": {"field": "customer"}},
+    {"id": "n6", "title": "Enter Number", "config": {"name": "qty", "label": "Qty"}},
+    {"id": "n7", "title": "Enter Number", "config": {"name": "price", "label": "Price"}},
+    {"id": "n8", "title": "Calculate From Two Values", "config": {"operation": "multiply"}},
+    {"id": "n9", "title": "Format Currency Value"},
+    {"id": "n10", "title": "Build Summary Record", "config": {"labels": ["customer", "total"]}},
+    {"id": "n11", "title": "App End"}
+  ],
+  "edges": [
+    ["n1", "event", "n2", "_start"],
+    ["n2", "value", "n3", "text"],
+    ["n3", "text", "n4", "text"],
+    ["n4", "text", "n5", "value"],
+    ["n6", "value", "n8", "first"],
+    ["n7", "value", "n8", "second"],
+    ["n8", "result", "n9", "value"],
+    ["n5", "value", "n10", "value_1"],
+    ["n9", "text", "n10", "value_2"],
+    ["n10", "_done", "n11", "finish"]
+  ]
+}

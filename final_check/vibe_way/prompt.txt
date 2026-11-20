@@ -1,0 +1,7 @@
+Task: "Order line helper": a command-line Python 3.10 program. Args: --customer TEXT, --qty NUMBER, --price NUMBER. It (1) trims the customer name, (2) converts it to Title Case, (3) rejects an empty name with exit code 1 and a one-line message on stderr, (4) multiplies qty by price, (5) formats the total as currency with a $ sign and 2 decimals, (6) prints one JSON object on stdout: {"customer": <title-cased name>, "total": "$X.XX"} ; exit 0.
+Acceptance checklist:
+C1 `--customer "  ada lovelace " --qty 3 --price 2.5` prints {"customer": "Ada Lovelace", "total": "$7.50"}
+C2 `--customer "   " --qty 1 --price 1` exits 1 with message on stderr, no stdout
+C3 two runs of C1 give identical output
+C4 a non-number --qty exits 1 with a message
+Python 3.10, standard library only, write main.py

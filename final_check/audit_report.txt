@@ -1,0 +1,56 @@
+FINAL INDEPENDENT AUDIT (report only; no project file was edited)
+Files marked "in flux": prototype/bedrock.js, prompt.js, app.js, index.html, templates.js, card_templates/templates_export.py (audited as on disk when read).
+
+TESTS (run in this audit)
+INFO | python -m unittest discover -s tests -> Ran 125 tests, OK (stderr)
+INFO | node tests\ports_logic.test.js -> 1247 passed, 0 failed
+INFO | node tests\request.test.js -> 64 passed, 0 failed
+INFO | python -m card_templates.testing -> 209 of 209 cards pass
+INFO | python -m card_templates.ports_export --check -> exit 0 (up to date)
+INFO | python -m card_templates.templates_export --check -> exit 0 (up to date)
+INFO | python -m card_templates.manifest has NO --check mode; running it REWROTE card_templates/manifest.json (209 cards). git status shows the file unchanged, so the content was identical. Do not treat it as read-only.
+
+FIX LINES
+FIX | MED | prototype/app.js:428-447 (guard at :442) | Delete/Backspace is blocked only for INPUT/TEXTAREA. With focus on a <select> (regionSelect, modelSelect) or a button, Backspace/Delete is preventDefault-ed and deletes the selected card with all its links. There is no undo. | Also skip when tag is SELECT/BUTTON, or when a <dialog> is open (event.target.closest('dialog')), or when isContentEditable.
+FIX | MED | card_templates/backend/text_processing.py:87 | Search Text For Pattern runs a user regex with no guard. Probe: pattern "(a+)+$" on "aaaa...a!" (28 chars) was still running after 5 s (catastrophic backtracking). Also text length is not checked against MAX_TEXT_LENGTH. | Reject text longer than MAX_TEXT_LENGTH and patterns over ~200 chars; reject nested quantifiers or use fullmatch-free simple matching; document the limit.
+FIX | LOW | card_templates/runtime.py:46-48,961-963 | MAX_IMPORT_ROWS=50,000 is not reachable: Import Records / Load Sample Data pass bounded(...,50000) but Store.insert_many bounds at MAX_LOOP_ITEMS=10,000. Probe: 12,000-row CSV gives code limit_exceeded (not too_many_rows). Test only covers 50,001. | Make insert_many take a limit, or lower MAX_IMPORT_ROWS to 10,000 and say so.
+FIX | LOW | card_templates/data/record_operations.py:397 | Delete Multiple Records does int(rec_id) with no guard. Probe: ids=["abc"] -> ValueError, ids=[None] -> TypeError (not CardError, so no error path). Update Field Across Records (:355) handles this correctly. | Wrap in try/except (TypeError, ValueError) -> CardError("invalid_input").
+FIX | LOW | card_templates/backend/list_operations.py:280-290,336-345 and field_transformations.py:141-147 | Paginate Record List, Take Record Range, Extract Substring compare start/end/page/page_size/length without a type check. Probe: page="1" or start="0" -> TypeError; start=0.5 -> TypeError (slice). | Use try_number/int check and raise CardError("invalid_input").
+FIX | LOW | card_templates/runtime.py:271,275 | safe_eval only catches ZeroDivisionError. Probe: round(1, 2.5) -> TypeError; huge float products return inf (no error). Same crash comes out of Store._normalise_field (computed field) and Store._decode. | Catch (TypeError, OverflowError, ValueError) around walk() -> CardError("bad_expression"); reject non-finite results.
+FIX | LOW | card_templates/backend/date_and_time_operations.py:165 | Calculate Working Days loops day by day with no range cap. Probe: 0001-01-01..9999-12-31 spent 2.6 s then OverflowError (not CardError). | Cap the span (e.g. 100 years) or count weekdays by arithmetic; catch OverflowError.
+FIX | LOW | card_templates/data/import_and_export.py:168-205 | Export Table returns `filename` unvalidated (probe: "../../x.csv" accepted), while Read Chosen File validates names. Shell must not trust it, but the card contract says file cards hand over only plain names. | Reuse the bad_filename check from Read Chosen File (no / \ : NUL, not . or ..).
+FIX | LOW | card_templates/data/import_and_export.py:237-251 | Load Sample Data Set default generator skips types choice, multichoice, phone, time, datetime. A required field of those types makes the default call fail with code required (probe: required choice field). | Add samples for those types (first choice, "555-0100", "09:00", ISO date-time).
+FIX | LOW | main.js:93-103 | No lockout or attempt counter on login. Only a fixed 500 ms delay after a failure, and an unlimited number of tries. Local app, renderer is the app's own page, so exposure is small, but the request asked for lockout checks. | Count failures per name in memory; after 5, refuse for 30-60 s with a growing delay.
+FIX | LOW | main.js:73-86 | registerAccount reads accounts.json (:75), awaits scrypt (:80), then writes the stale copy. Two concurrent register calls (different names) can lose one account; same name can create a duplicate. UI disables the submit button, so only a scripted caller can trigger it. | Re-read the store after the await (or run register through the same serialized() queue) before pushing.
+FIX | LOW | main.js:246 | will-navigate allows any URL starting with file:// (any local file), not just the app page. | Allow only url === APP_URL (strip #/?), as the IPC guard already does.
+FIX | LOW | runtime.py:797,806 (and add_field) | Unique index name is 'ux_' + table + '_' + field. Table a_b + field c and table a + field b_c give the same name, so the second table/field fails with a raw sqlite error. | Quote with a separator that identifiers cannot contain, or add a counter.
+FIX | LOW | card_templates/README.md | Stale: the file list does not mention templates_export.py or prototype/templates.js (its --check is not described). Root README.md is a one-line stub (no run, test or layout instructions). | Add the two lines and a short run/test section.
+FIX | LOW | sample_build/, sample_build2/ (untracked, ~330 KB) | Scratch output from the Generate trial (requests, replies, logs, undef_check.py that activity.md itself calls stale). Not in .gitignore, so `git add -A` would commit them. | Delete or move to final_check/archive, or add both dirs to .gitignore.
+
+CONSISTENCY (checked with scripts)
+INFO | Cards.md: 209 numbered rows 001..209, no gaps, no duplicate names. Category counts 34+68+31+22+16+20+10+8 = 209 match the Categories table and the totals row (Cards.md:71-72).
+INFO | prototype/catalog.js (209), card_templates/manifest.json (209) and Cards.md agree on name, order and number for every card. Non-implicit input/output port ids of every catalog card equal the manifest inputs/outputs (0 mismatches). Category counts in catalog.js: ui 34, backend 68, data 31, logic 22, trigger 16, integration 20, ai 10, output 8.
+INFO | Merged cards: no old names (Find Minimum/Maximum Value, Add Time To Date, Subtract Time From Date, Archive Record, Restore Archived Record, Import Records From CSV/JSON, Export Table To CSV/JSON) appear anywhere in code, tests, docs, sample_build* or Cards.md. Only hit outside activity.md: a test label "restores archived record" in data/record_operations.py:240 (a plain label, not a card name).
+INFO | VISUAL_PROGRAMMING_PROJECT_FRAMEWORK.md:26,59,149,389 still say "200 cards" and a 200-card allocation (30/60/30/25/15/20/10/10). The catalog now has 209 (34/68/31/22/16/20/10/8). The user said 200 is not a hard limit; the framework text is the stale side. Update the numbers or add a note.
+INFO | Known follow-ups confirmed still open (not new defects): CSP connect-src 'self' blocks Bedrock (no network phase yet); buildConfirmed not cleared when cards change; Run At App Start overlaps App Start; accounts local only, no password recovery.
+
+ELECTRON SECURITY (real defects only; the rest checked and fine)
+INFO | OK: contextIsolation true, nodeIntegration false, sandbox true (main.js:226-228); window-open denied; preload exposes only seven fixed calls and coerces args with String(); every IPC handler checks sender is mainWindow, top frame, and exact app URL (main.js:179-189); key length capped 4096, password 8..256, username regex; scrypt 64 bytes with 16-byte random salt, timingSafeEqual, same hash cost for unknown names; store files written 0o600 via tmp+rename; key encrypted with safeStorage async API; corrupt store is renamed, not deleted.
+INFO | OK: no console.* call or error string includes the API key or password (only console.error('[link refused]') in app.js:666 with port details). CSP: default-src 'self'; script-src 'self'; no inline script. 'unsafe-inline' for style only.
+INFO | OK (XSS): no innerHTML with data anywhere in prototype/*.js; the 8 innerHTML uses are `= ''` clears. Card titles, messages and issue text all go through textContent.
+
+APP LOGIC
+INFO | OK: ports.js checkConnection order (no_such_port, direction, same_card, type_mismatch, duplicate, input_taken, cycle); cycle check via hasPath; recheckAllLinks reuses the same function; findGenerationIssues covers no_start, start_unlinked, no_end, open_input. deleteNode removes all connected edges, the order entry and the selection (app.js:126-152); Start card cannot be deleted or duplicated. Issues dialog flow (confirm -> issues -> Show / Generate anyway) is consistent.
+INFO | Minor, not worth a FIX: deleteNode does not clear selectedEdgeID of a removed edge (Delete on it is a no-op); runGeneration (app.js:~1230) builds `request` and discards it (intended, no network phase).
+
+CARD SAMPLE (27 cards read or probed): Import Records, Export Table, Load Sample Data Set, Read Chosen File, Search Text For Pattern, Fill Text Template, Take Record Range, Paginate Record List, Calculate Working Days, Extract Substring, Retry Failed Step, Run On A Timer, Calculate Percentage Change, Calculate Reorder Quantity, Delete Multiple Records, Update Field Across Records, Route By Numeric Range, Format Currency Value, Calculate Percentage Of Total, Pick Date (signature), Store.insert/update/delete/find/transaction, coerce_value, safe_eval, compile_condition.
+INFO | OK: csv_safe_cell applied on every CSV cell in Export Table (probe "=1+1" -> "'=1+1"); SQL uses whitelisted names and parameters only; Fill Text Template is single-pass (no format-string escape); import size cap checked before parsing; Delete/Update Field Across Records are all-or-nothing; Retry Failed Step wraps each attempt in a transaction.
+INFO | Retry Failed Step docstring says "only if safe to repeat" but nothing checks that (no idempotent flag test). It is a documented contract, not enforced.
+
+DEAD FILES
+INFO | __pycache__ dirs exist but are ignored (.gitignore: node_modules/, __pycache__/, *.pyc) and `git ls-files` lists none. git status: activity.md, bedrock.js, index.html, prompt.js modified; templates_export.py, templates.js, request.test.js, test_templates_export.py, sample_build*/ untracked (new work, not yet committed). No scratch dirs inside the project besides sample_build*.
+
+COUNTS: HIGH 0 | MED 2 | LOW 13
+
+VERDICT: CHANGES NEEDED
+Reason: no HIGH defect and all suites are green (unittest 125 OK, ports_logic 1247, request 64, templates 209/209, both --check OK), but two MED defects (keyboard delete of a card while a select has focus; regex hang in Search Text For Pattern) should be fixed first. The LOW items can be batched or accepted.

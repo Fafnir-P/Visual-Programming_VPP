@@ -1,0 +1,4 @@
+Order line helper: Python 3.10 CLI. Args --customer TEXT, --qty NUMBER, --price NUMBER.
+(1) trim the name, (2) Title Case, (3) reject an empty name with exit 1 and a one-line stderr message, (4) multiply qty by price, (5) format as currency '$' + 2 decimals, (6) print one JSON on stdout: {"customer": <title-cased>, "total": "$X.XX"}, exit 0.
+Checks: C1 --customer "  ada lovelace " --qty 3 --price 2.5 -> {"customer": "Ada Lovelace", "total": "$7.50"}; C2 --customer "   " --qty 1 --price 1 exit 1, stderr message, no stdout; C3 two runs of C1 identical; C4 non-number --qty exit 1 + message.
+Python 3.10, standard library only, write main.py

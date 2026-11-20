@@ -1,0 +1,59 @@
+MEASURE 2 (MEASURER C) - CARD WAY AFTER THE FIX - Order line helper
+Method: the app's own code (compile.js, bedrock.js, meter.js, ...) loaded in a node vm, as in tests/orderline_helper.js. Graph final_check\orderline\graph.json. No project file edited, no model called.
+Scripts and outputs: final_check\card_way2\ (measure.js, measure20.js, graph20.json, graph_gap.json, result.json, result20.json, gap_request.json, run1..5_*, run20\). Python 3.13.7, node 26.13, Windows. Also: final_check\measure2_card.json.
+
+1. TIMING, 5 runs, milliseconds (min / median / max)
+   serializeGraph            0.080 / 0.088 / 0.315
+   compileMainPy             0.109 / 0.117 / 0.718   (run 1 is the cold run)
+   buildDeterministicFiles   0.084 / 0.091 / 0.771   (includes serialize + compile + cards.py assembly)
+   write project to temp dir 0.514 / 0.564 / 0.616   (2 files)
+   python run of C1          108.8 / 115.3 / 119.1   (process start + imports + cards; not an app step)
+   copy of card_templates     37.9 / 40.0 / 45.6     (test setup only, not an app step)
+   App-side work (build + write) is about 0.7 ms median. The python run dominates and is the user's program, not generation.
+
+2. CHECKS on the written project (run 5) - all pass
+   C1 pass: exit 0, {"customer": "Ada Lovelace", "total": "$7.50"}, stderr empty.
+   C2 pass: blank name -> exit 1, stdout empty, one line stderr "customer is required.", no traceback.
+   C3 pass: two runs identical ({"customer": "Bob", "total": "$2.50"}).
+   C4 pass: --qty abc -> exit 1, stdout empty, one line "Qty must be a number.".
+   Project test: python -m unittest tests.test_orderline -> 5 tests OK.
+   Files: cards.py 3881 B / 87 lines, main.py 1966 B / 38 lines.
+
+3. MODEL TOKENS, deterministic path
+   Meter summary (runGeneration's own calls: resetMeter, recordUsage input 0 output 0 estimated, summary):
+   {"inputTokens":0,"outputTokens":0,"totalTokens":0,"waitMs":null,"accounting":"estimate","note":"assembled by the app"}
+   0 in / 0 out, accounting = estimate (not a real count; no model was involved, so 0 is true by construction). waitMs is null: no model wait is recorded.
+
+4. MODEL PATH (fallback), same graph with a gap
+   Gap made on a copy (graph_gap.json): both Enter Number cards keep the default name "number". compileMainPy -> ok false, 1 gap: Enter Number (n7): name "number" already used by Enter Number (n6).
+   (Note: the brief said "remove the unlinked name"; an empty name is not possible in the settings, so I used the duplicate-name gap, which the app really reports.)
+   assembleBedrockRequest(gaps): body 4588 B; system prompt 1955 chars + graph 2093 chars; estimated input 1013 tokens (chars/4); reserved output maxTokens 4096 (a ceiling, not a forecast).
+   buildProjectFiles(request, reply) with a made-up reply holding only main.py: no gaps, writes cards.py (app) + main.py. So the pipeline can handle it. Not tested with a real model reply.
+   Limit: the request still carries the whole graph, not just the gap cards (dev2 notes say so).
+
+5. 23-CARD GRAPH (graph20.json): 23 cards incl. Start and End (21 working cards)
+   Chains: Enter Text > Trim > Case(title) > Replace Text In Field > Trim; Enter Number x2 > Calculate(multiply) > Round > Format Currency; Enter Number x2 > Calculate(add) > Change Value By Percent(+10) > Round > Format Currency(EUR); Enter Number x2 > Calculate Percentage Change > Round(1); all four into Build Summary Record (labels customer,total,with_shipping,change_pct) > End.
+   Links: 22 of 22 pass checkConnection (ports.js). findGenerationIssues: none.
+   compileMainPy: ACCEPTED, 0 gaps. (First try failed only because my own "order" list put the summary card before its sources; the app reported it as a gap with a clear message. Fixed in my graph file.)
+   Run (--customer "  ada-lovelace  " --qty 3 --price 2.5 --shipping 4 --handling 1 --old 50 --new 60):
+   {"customer": "Ada Lovelace", "total": "$7.50", "with_shipping": "EUR 5.50", "change_pct": 20.0}  - all four values correct by hand. Repeat run identical.
+   Bad number (--qty abc): exit 1, stdout empty, "Qty must be a number.". 
+   Files: cards.py 5042 B / 113 lines (about 1261 tokens); main.py 3561 B / 53 lines (about 891 tokens).
+   Estimate of equivalent hand-written output (chars/4 of main.py + cards.py): about 2151 tokens. If a model wrote only main.py: about 891. Model tokens the card way spent: 0.
+   buildDeterministicFiles for this graph, 5 runs: 0.25 - 0.61 ms. Python run: 80.7 - 82.9 ms (3 runs).
+   If the model path were used for it: request about 6448 B, about 1401 input tokens (estimate).
+
+6. DEFECTS / OBSERVATIONS
+   a) Missing flags give a confusing message. Running only --customer bob on the 23-card program: exit 1, "first must be a number." (internal port name, no hint which flag). Flags are not required in argparse; an absent Enter Number value reaches Calculate as None.
+   b) Output for the second graph is typed loosely: change_pct prints 20.0 (a float, not text); labels decide the keys. Fine, but not formatted unless a Format card is used.
+   c) The order list must be topological; the app only reports it as a gap ("runs before or without its source"). Not a defect, but a user dragging cards must get the run order right.
+   d) The model path still sends the whole graph, not just the gap cards (known, in dev2 notes).
+   e) Nothing wrong found in the 11-card output; C1-C4 pass in all runs.
+   f) git status shows many modified project files (README, app.js, bedrock.js, ...) - these were not changed by me (I only created files under final_check\card_way2\ and the two measure2_card files).
+
+7. NOT MEASURED
+   - Task completion time: the user's time to drag, link and configure cards (graph files were written by hand by me, not through the UI; settings panel not used).
+   - Real Bedrock latency and real token counts (no model call; all token figures are chars/4 estimates).
+   - Electron window behaviour (confirm dialog, settings panel DOM).
+   - Python timings include process start on this machine only; one machine, one session, 3-5 samples.
+   - Comparison to the vibe way was not done here (I did not read those files).

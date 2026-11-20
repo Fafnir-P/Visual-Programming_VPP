@@ -1,0 +1,38 @@
+DEV2 NOTES: settings panel, deterministic main.py, trimmed request
+
+1. SETTINGS PANEL
+   prototype/index.html: <aside id="settingsPanel"> (title + fields), compile.js script tag before bedrock.js.
+   prototype/app.js: renderSettingsPanel() called from render(). One card selected -> one labelled field per setting (text, number, yes/no checkbox, select if a setting lists choices). Values go to node.config. Built with textContent/value only. Typing does not call render() and never touches links. Bad number: inline note ("... is not a number. Not saved."), aria-invalid, old value kept.
+   prototype/compile.js (new): pure settingKind, parseSettingValue, settingDisplay, nodeSettings (defaults + node.config).
+   prototype/style.css: panel styles with a focus ring.
+   Limit: templates.js lists no choices, so no field is a select yet. Type comes from the default (true/false, number, else text). Optional settings with no default (labels) accept comma text or JSON.
+2. DETERMINISTIC main.py
+   prototype/compile.js: compileMainPy(graph) -> {ok, mainPy, gaps}. Writes sys.path block, argparse flag per unlinked input card (flag = its name setting), calls in run order with linked inputs taken from source outputs and all settings as keywords, JSON result, one except for CardError/ValueError/ArithmeticError (one line to stderr, exit 1). Result = terminal data cards (no outgoing data link): one -> its outputs (Build Summary Record -> its record); several -> object keyed by title.
+   Gaps (ok:false, mainPy ''): duplicate or invalid flag names (names both cards), cards using ctx/store/files/network, control-port cards (triggers, routes, loops), input cards not in the CLI list, unlinked required inputs, several links into one input, link from a later card, Start linked to a data input, required setting with no value, any-typed terminal result, nothing to run.
+   prototype/bedrock.js: serializeGraph() is now the full internal graph (uses nodeSettings); buildDeterministicFiles() -> cards.py + main.py with zero model tokens.
+   prototype/app.js: runGeneration() builds files with the app when ok and records the meter (input 0, output 0, accounting estimate, note 'assembled by the app'); describeRequestSize() says "The model is not needed: 0 model tokens (estimate)" or lists the gaps and the estimate.
+   prototype/meter.js: recordUsage keeps an optional note; summary() returns note.
+3. TRIM
+   prototype/bedrock.js slimGraph(): per node only id, title, fn, set (settings that differ from the function default) and role for Start/End. Dropped: category, catalogID, per-node inputs/outputs, default settings, empty fields. cards map keys in/set/out/req (empty ones dropped). Links are 'n2.value>n3.text'. assembleBedrockRequest(gaps) adds the gaps. Cap and parse/build refusals unchanged.
+   prototype/prompt.js: rewritten to match; 2753 -> 1955 chars. Rules kept.
+   NOT done: the model still gets the whole slim graph with the gaps, not only the gap cards. main.py is one file; sending a sub-graph would need the app to merge a partial main.py. Recommend as a later step.
+4. FIXTURE + TESTS
+   final_check/orderline/graph.json (11 nodes incl. Build Summary Record with labels customer,total; names customer/qty/price; case title; operation multiply; field customer).
+   tests/orderline_helper.js, tests/write_orderline.js (write project with the app code), tests/test_orderline.py (4 checks C1-C4 on the written project, in a temp dir with a copy of card_templates), tests/settings.test.js (new, 62), tests/request.test.js (83 -> 84, new request shape), tests/assemble_cards.js (compile.js added to the load list).
+   Written project checked by hand: C1 {"customer": "Ada Lovelace", "total": "$7.50"} exit 0; blank customer exit 1, stderr "customer is required.", no stdout; qty abc exit 1, "Qty must be a number."; two runs identical.
+
+5. RESULTS
+   python -m unittest discover -s tests: 151 tests OK (includes 5 new in test_orderline.py)
+   ports_logic 1247 passed; request 84; meter 17; main_pure 12; settings 62; card_templates.testing 209 of 209; ports_export --check 0; templates_export --check 0.
+
+6. TOKENS, order-line task (app-side estimates, chars/4; no model run)
+   Before (measure A, 10 cards): input 1840 per attempt, output 855 over 2 attempts, 2 attempts, model time 13.3 s.
+   After, fully supported graph (11 cards): model tokens 0 in, 0 out, 0 attempts; app compile + cards.py about 0.07 ms.
+   After, if the model path is used (request only): input about 986 tokens (system prompt 1955 chars + graph 1985 chars; -46% vs 1840). With one duplicate-name gap: 1018.
+   Vibe baseline for comparison: 799 in + 291 out = 1090. Card way now: 0 model tokens, so below the 50% ideal on tokens; time is app-side only (milliseconds).
+
+7. NOT RUN / RISKS
+   - Not run in the Electron window: the settings panel DOM and the confirm dialog text were checked by code and source tests only (no browser).
+   - No model call; the new prompt is untested against a real model reply.
+   - Argparse for the 14 listed input card types was exercised only for Enter Text and Enter Number; the others pass the value as text.
+   - Python 3.13 only. Generate still builds files in memory (state.project); writing to disk and the real send are later phases.

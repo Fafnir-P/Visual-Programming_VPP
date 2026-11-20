@@ -4803,7 +4803,7 @@
    "idempotent": true,
    "role": "data",
    "examples": 3,
-   "invalid_cases": 1,
+   "invalid_cases": 3,
    "summary": "Finds whether a text field contains a specified word, phrase, or pattern.",
    "number": 69,
    "ports": {

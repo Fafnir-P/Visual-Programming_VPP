@@ -1,0 +1,13 @@
+FIX NOTES, round 2 (developer)
+Files changed: card_templates/templates_export.py, prototype/templates.js (regenerated), prototype/prompt.js, prototype/bedrock.js, tests/request.test.js, tests/test_templates_export.py.
+
+1. templates_export.py: runtime names now also come from own-module helpers (Shift Date By Time -> iso; Define App Settings -> check_identifier). New per-card "imports" list (Import Records, Export Table: import csv, import io). prompt.js says to put them at the top of cards.py; bedrock.js sends "imports" per node. templates.js regenerated (209 cards). Tests: 1 (test_known_cross_names) + request.test.js 2 checks (Export Table imports, helper runtime names) + node carries imports.
+2. tests/test_templates_export.py: test_no_undefined_names_in_any_template checks all 209 entries (imports + helpers + source, builtins + runtime names). Passes now. Not run against the old code (the reviewer's undef_check.py found 4 failing cards there; old exporter lacked both name sources).
+3. L1 prompt: main.py starts with a sys.path block that walks up from its own folder to the folder holding card_templates; runs with no PYTHONPATH. 1 test.
+4. L2 prompt: flag = '--' + config name; default = config default else None; None allowed; GAP only if requiredConfig lists it and no other source. 1 test.
+5. L3/L5/L6 prompt: files are main.py + cards.py; imports at top of cards.py; prints JSON of the card linked into App End (last card before End); CardError propagates, one try/except CardError in main.py prints to stderr and exits 1. 1 test.
+6. bedrock.js parseGenerationReply: malformed GAP -> gap "(reply)"; empty reply -> gap "(reply) | no files in reply"; refuses ':' , control chars, device names (CON PRN AUX NUL COM1-9 LPT1-9, with extension), duplicates (case-insensitive), '.'/empty segments, leading '~', segments ending dot/space; cap 20 files, 200000 bytes/file. Tests: 1 malformed GAP, 3 empty replies, 17 refused paths, 4 allowed paths, duplicates, count cap, size cap.
+7. MAX_REQUEST_BYTES counts JSON.stringify(whole body). Tests: exact size passes, size-1 refuses, body size includes prompt; old 100-byte test kept.
+
+RESULTS: python -m unittest discover -s tests: 125 tests OK; ports_logic.test.js 1247 passed 0 failed; request.test.js 64 passed 0 failed (was 29); card_templates.testing 209 of 209; ports_export --check exit 0; templates_export --check exit 0.
+Not checked: real model reply, Python 3.10 run, a run of main.py built from the new prompt.

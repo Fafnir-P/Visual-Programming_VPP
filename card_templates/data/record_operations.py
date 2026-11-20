@@ -1,7 +1,7 @@
 """Record Operations (Data Modeling / Storage). CRUD operations on saved records."""
 from __future__ import annotations
 
-from ..runtime import CardError, bounded, card, get_field, MAX_LOOP_ITEMS
+from ..runtime import CardError, as_int, bounded, card, get_field, MAX_LOOP_ITEMS
 
 CATEGORY = "Data Modeling / Storage"
 GROUP = "Record Operations"
@@ -390,11 +390,12 @@ def delete_multiple_records(ctx, *, ids, table: str = "records", limit: int = MA
         raise CardError("invalid_input", "IDs must be a list.")
     id_list = bounded(ids, limit, "records")
     ctx.store.schema(table)  # raises no_such_table when the table is missing
+    numbers = [as_int(rec_id, "id") for rec_id in id_list]   # check every id before deleting anything
     count = 0
     with ctx.store.transaction():   # all or nothing: a protected record stops the whole delete
-        for rec_id in id_list:
+        for rec_id in numbers:
             try:
-                ctx.store.delete(table, int(rec_id))
+                ctx.store.delete(table, rec_id)
                 count += 1
             except CardError as err:
                 if err.code != "not_found":   # an id that is already gone is not an error

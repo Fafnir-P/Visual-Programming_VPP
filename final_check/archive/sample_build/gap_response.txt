@@ -1,0 +1,6 @@
+﻿MODEL RESPONSE for request_gap.json (edge e2 removed: Enter Number n3 -> Calculate From Two Values.second)
+
+Files: none generated.
+GAP: Card n4 "Calculate From Two Values" (4th in run order) has a required input "second" (number) with no link and no
+setting to give it a value. Per SYSTEM_PROMPT ("report the specific gap and stop") no code is written.
+Also a gap in both requests: Enter Number cards n2/n3 have no value source (optional input "value" unlinked, no setting).

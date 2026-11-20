@@ -1,0 +1,36 @@
+AUDIT FIX NOTES (2 MED, 13 LOW). Every FIX line from final_check/audit_report.txt.
+Tests: tests/test_audit_fixes.py (python, 21 tests) and tests/main_pure.test.js (node, 12 checks).
+
+MED
+1. prototype/app.js (handleKeyDown) | new isEditingTarget(): Delete/Backspace is ignored for INPUT, TEXTAREA, SELECT, BUTTON, contentEditable, anything inside a <dialog>, and while any dialog[open] exists | tests/main_pure.test.js (function cut out of app.js and run in vm; the key handler itself is not run: no DOM harness)
+2. card_templates/backend/text_processing.py (Search Text For Pattern) | _check_safe_pattern(): pattern 1..200 chars; refuses a repeated group that already repeats or has "|" ("(a+)+", "(a|b)*"); max 2 open-ended repeats (* + {n,}); text limit 100000 / 10000 / 1000 chars for 0 / 1 / 2 open-ended repeats (an unanchored search costs about length^(k+1)). Limits written in the card docstring | tests: probe "(a+)+$" on 28 a's + "!" returns bad_expression in <1 s; other bad shapes; normal patterns still match; text limits; two new invalid examples on the card
+   Note: the limit is stricter than MAX_TEXT_LENGTH on purpose (a plain MAX_TEXT_LENGTH bound still allows "a*a*b" to run for minutes: measured >100 s at 10000 chars).
+
+LOW
+3. card_templates/runtime.py + data/import_and_export.py | Store.insert_many(table, records, limit=MAX_LOOP_ITEMS); Import Records and Load Sample Data Set pass MAX_IMPORT_ROWS, so 10001..50000 rows import and >50000 gives too_many_rows | test: 12000-row CSV imports; 50001 rows -> too_many_rows; insert_many default still limit_exceeded at 10001
+4. card_templates/data/record_operations.py (Delete Multiple Records) | new runtime as_int(); all ids checked before any delete; ["abc"], [None], [0.5], [True] -> invalid_input | test: each probe, nothing deleted
+5. backend/list_operations.py (Paginate Record List, Take Record Range), backend/field_transformations.py (Extract Substring) | as_int() on page, page_size, start, end, length -> invalid_input (a float like 2.0 is accepted) | test: "1", "0", 0.5, None
+6. runtime.py safe_eval | catches TypeError/OverflowError/ValueError -> bad_expression; a non-finite float result -> bad_expression | test: round(1, 2.5), round(1,2,3), max(), round(1e308*10), 1e200*1e200
+7. backend/date_and_time_operations.py (Calculate Working Days) | span over 36600 days -> limit_exceeded; loop stops before adding a day on the last date, so 9999-12-31 no longer overflows | test: 0001-01-01..9999-12-31 fast refusal; 9999-12-27..31 = 5 days
+8. data/import_and_export.py (Export Table) | _plain_filename() shared with Read Chosen File; non-text filename -> invalid_input; bad name -> bad_filename (csv and json) | test: "../../x.csv", a/b, a\b, C:x, "..", "."
+9. data/import_and_export.py (Load Sample Data Set) | default samples for phone ("555-0100"), time, datetime (ISO), choice (first choice), multichoice ([first choice]) | test: required fields of those types load 3 records
+10. main.js + new lockout.js | in-memory counter per name: 5 failures -> refuse that name 30 s, doubling each time (max 10 min); success clears it; checked before the password hash | test: tests/main_pure.test.js (lockout part, injected clock). Login flow in Electron itself: not run
+11. main.js registerAccount | store is read again after the scrypt await, then pushed and written with no await between | untested (needs Electron); logic is 4 lines
+12. main.js will-navigate | isAppUrl(url): only the exact app URL (query/hash stripped); IPC guard uses the same function | test: only checks that isAppUrl exists; behaviour not run (Electron)
+13. runtime.py unique index name | _ux_name(): "ux:" + table + ":" + field (":" cannot be in an identifier) | test: tables a_b/c and a/b_c both get unique indexes
+14. card_templates/README.md, README.md | templates_export.py, prototype/templates.js, prototype/meter.js lines added; root README has run, test and folder sections | n/a
+15. sample_build/, sample_build2/ | moved whole to final_check/archive/ (nothing deleted); three path mentions in activity.md updated; dev_notes.txt left as a log | n/a
+
+REGENERATED: python -m card_templates.manifest (1 line changed: new card doc text), templates_export, ports_export. Cards.md and prototype/catalog.js are byte-identical (no git diff). Function names and ports unchanged.
+
+FINAL RUN
+python -m unittest discover -s tests : Ran 146 tests, OK (was 125)
+node tests\ports_logic.test.js       : 1247 passed, 0 failed
+node tests\request.test.js           : 83 passed, 0 failed
+node tests\meter.test.js             : 17 passed, 0 failed
+node tests\main_pure.test.js         : 12 passed, 0 failed (new)
+python -m card_templates.testing     : 209 of 209 cards pass
+ports_export --check, templates_export --check : exit 0
+
+COUNTS: 15 of 15 FIX lines fixed (2 MED, 13 LOW). Not fixed: none.
+NOT CHECKED: Electron runtime (lockout, register race, will-navigate, key handler were not run in a window); the existing persisted databases with old "ux_" index names (the index rename would not drop an old saved index; not checked whether any saved database exists).

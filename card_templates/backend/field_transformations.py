@@ -5,6 +5,7 @@ import re
 
 from ..runtime import (
     CardError,
+    as_int,
     as_text,
     card,
     coerce_value,
@@ -140,6 +141,8 @@ def format_currency_value(
 )
 def extract_substring(ctx, *, text, start: int = 0, length: int = 10) -> dict:
     """Pulls out a portion of text from a field using start position and length."""
+    start = as_int(start, "start")
+    length = as_int(length, "length")
     if start < 0:
         raise CardError("invalid_input", "Start position cannot be negative.")
     if length < 0:

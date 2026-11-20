@@ -1,0 +1,13 @@
+dev3: missing command-line value names the flag
+
+Change (prototype/compile.js, compileMainPy output only):
+- A text flag is required=True when its card's "required" setting is true or its value feeds a required input (port optional === false). Flags with neither stay optional; yes/no flags never required.
+- Generated main.py has die(message): one line on stderr, exit 1. ap.error = die, so argparse errors (missing flags, unknown flags) exit 1, not 2.
+  Missing: "the following arguments are required: --qty, --price".
+- Number cards (Enter Number, Adjust Slider, Rate With Stars, Enter Currency Amount): flag has type=num_flag('qty'); bad text -> "--qty must be a number". The value is passed on unchanged; the card still coerces it. to_number is imported only when used.
+Files: prototype/compile.js, tests/test_orderline.py (+3), tests/settings.test.js (+3).
+Not touched: bedrock.js, request.test.js.
+
+Counts: unittest 154 OK (was 151); settings 65; ports_logic 1247; request 84; meter 17; main_pure 12; card_templates.testing 209/209; ports_export --check 0; templates_export --check 0.
+C1-C4 pass. graph20.json (23 cards) still compiles.
+Not checked: Python other than the installed one; "required" for non-text flags; Electron UI.

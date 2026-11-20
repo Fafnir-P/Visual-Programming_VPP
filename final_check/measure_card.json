@@ -1,0 +1,41 @@
+﻿{
+    "task":  "Order line helper (card way)",
+    "graph_cards":  10,
+    "graph":  "App Start, Enter Text, Trim Whitespace, Change Text Case, Check Field Is Required, Enter Number x2, Calculate From Two Values, Format Currency Value, App End",
+    "request_bytes":  8568,
+    "input_tokens_est":  1840,
+    "input_tokens_est_total_if_resent":  3680,
+    "output_tokens_est":  855,
+    "output_tokens_per_attempt":  [
+                                      458,
+                                      397
+                                  ],
+    "attempts":  2,
+    "repairs":  1,
+    "model_step_seconds":  [
+                               6.28,
+                               7.02
+                           ],
+    "model_step_seconds_total":  13.3,
+    "timestamps":  {
+                       "a1_T0":  "2026-11-19T17:50:55.98-08:00",
+                       "a2_T0":  "2026-11-19T17:51:32.54-08:00",
+                       "a1_T1":  "2026-11-19T17:51:02.26-08:00",
+                       "a2_T1":  "2026-11-19T17:51:39.57-08:00"
+                   },
+    "cards_py_bytes_app_written_not_generated":  2956,
+    "local_ms":  {
+                     "assembly":  0.53,
+                     "run":  83,
+                     "request":  2.98
+                 },
+    "checks":  {
+                   "C3":  "pass",
+                   "C4":  "pass",
+                   "C2":  "pass",
+                   "C1":  "pass"
+               },
+    "checks_attempt1":  "all fail (argparse crash: duplicate --number; C2/C4 only exit 1 with a traceback)",
+    "accounting":  "estimate (chars/4)",
+    "model":  "own ability (Auto), no Bedrock, no network"
+}

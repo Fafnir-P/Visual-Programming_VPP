@@ -121,6 +121,15 @@ def to_number(value: Any, name: str = "value") -> int | float:
     raise CardError("not_a_number", f"{name} must be a number.")
 
 
+def as_int(value: Any, name: str = "value") -> int:
+    """A whole number (a float like 2.0 is accepted). Text, true/false and 0.5 raise ``invalid_input``."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise CardError("invalid_input", f"{name} must be a whole number.")
+
+
 def as_text(value: Any, name: str = "value") -> str:
     """Text in, text out. None gives "". Anything that is not text raises ``invalid_input``."""
     if value is None:
@@ -272,9 +281,14 @@ def safe_eval(expression: str, names: dict[str, Any] | None = None) -> int | flo
         raise CardError("bad_expression", "Formula uses something that is not allowed.")
 
     try:
-        return walk(tree)
+        result = walk(tree)
     except ZeroDivisionError:
         raise CardError("divide_by_zero", "Formula divides by zero.") from None
+    except (TypeError, OverflowError, ValueError):
+        raise CardError("bad_expression", "Formula could not be worked out.") from None
+    if isinstance(result, float) and not math.isfinite(result):
+        raise CardError("bad_expression", "Formula result is not a finite number.")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -532,6 +546,11 @@ def matches(record: dict, cond: dict) -> bool:
         return False
     a, b = pair
     return a > b if op == "gt" else a >= b if op == "gte" else a < b if op == "lt" else a <= b
+
+
+def _ux_name(table: str, field: str) -> str:
+    """Unique-index name. ":" cannot appear in an identifier, so (a_b, c) and (a, b_c) differ."""
+    return "ux:" + table + ":" + field
 
 
 def _q(name: str) -> str:
@@ -794,7 +813,7 @@ class Store:
                 + (", " + columns if columns else "") + ")")
             for f in stored:
                 if f["unique"]:
-                    self._db.execute(f"CREATE UNIQUE INDEX {_q('ux_' + name + '_' + f['name'])} ON {_q(name)}({_q(f['name'])} COLLATE NOCASE)")
+                    self._db.execute(f"CREATE UNIQUE INDEX {_q(_ux_name(name, f['name']))} ON {_q(name)}({_q(f['name'])} COLLATE NOCASE)")
             schema = {"name": name, "fields": normal, "history": None}
             self._save_schema(name, schema)
         return schema
@@ -808,7 +827,7 @@ class Store:
             if "computed" not in normal:
                 self._db.execute(f"ALTER TABLE {_q(table)} ADD COLUMN {_q(normal['name'])} {_SQL_TYPE[normal['type']]}")
                 if normal["unique"]:
-                    self._db.execute(f"CREATE UNIQUE INDEX {_q('ux_' + table + '_' + normal['name'])} ON {_q(table)}({_q(normal['name'])} COLLATE NOCASE)")
+                    self._db.execute(f"CREATE UNIQUE INDEX {_q(_ux_name(table, normal['name']))} ON {_q(table)}({_q(normal['name'])} COLLATE NOCASE)")
             schema["fields"].append(normal)
             self._save_schema(table, schema)
         return schema
@@ -835,7 +854,7 @@ class Store:
         new = self._normalise_field(merged)
         with self.transaction():
             if "computed" not in new and new["unique"] != old.get("unique", False):
-                index_name = _q("ux_" + table + "_" + name)
+                index_name = _q(_ux_name(table, name))
                 if new["unique"]:
                     try:
                         self._db.execute(f"CREATE UNIQUE INDEX {index_name} ON {_q(table)}({_q(name)} COLLATE NOCASE)")
@@ -958,10 +977,10 @@ class Store:
             self._log_history(schema, table, created["id"], 1, "create", None, created)
             return created
 
-    def insert_many(self, table: str, records: list[dict]) -> list[dict]:
-        """All records are stored, or none are."""
+    def insert_many(self, table: str, records: list[dict], limit: int = MAX_LOOP_ITEMS) -> list[dict]:
+        """All records are stored, or none are. Import cards pass ``limit=MAX_IMPORT_ROWS``."""
         with self.transaction():
-            return [self.insert(table, r) for r in bounded(records, MAX_LOOP_ITEMS, "records")]
+            return [self.insert(table, r) for r in bounded(records, limit, "records")]
 
     def get(self, table: str, record_id: Any) -> dict | None:
         schema = self.schema(table)

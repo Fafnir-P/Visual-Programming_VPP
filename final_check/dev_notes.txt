@@ -1,0 +1,27 @@
+﻿DEV NOTES: app assembles cards.py, model writes only main.py, token/time meter
+
+1. Assembly in JS
+   prototype/bedrock.js: assembleCardsModule(nodes) builds cards.py from templates.js (stdlib imports, one runtime import line, helpers, each distinct card source once; Start/End skipped; throws on a name defined twice with different code).
+   prototype/bedrock.js: buildProjectFiles(request, reply) -> [{path:'cards.py'}, {path:'main.py'}] (array has .gaps; empty when gaps).
+2. Slim request
+   prototype/bedrock.js serializeGraph: per node {id, catalogID, title, category, role, settings, inputs, outputs, function}; `cards` map {function: {inputs, settings, required, outputs}} once per function; edges {from, to}; order. No template source. Compact JSON. MAX_REQUEST_BYTES cap kept. maxTokens = RESERVED_MAX_OUTPUT_TOKENS (4096).
+3. Prompt
+   prototype/prompt.js: model writes only main.py (sys.path block, argparse for Enter cards, order, edge wiring, JSON result, one CardError handler); all earlier rules kept except the cards.py ones. Prompt 3656 -> 2753 chars.
+   buildProjectFiles refuses a reply file named cards.py (gap "the app writes it"); parseGenerationReply unchanged.
+4. Meter
+   prototype/meter.js (new, loaded in index.html after prompt.js): estimateTokens (ceil chars/4), startGeneration/endGeneration, recordUsage, summary (accounting estimate|reported|uncertain; missing usage -> uncertain, tokens null, never 0), resetMeter. Task-time field names only: TASK_TIME_FIELDS.
+5. Confirm dialog
+   prototype/app.js describeRequestSize() in handleGenerateClick: estimated input tokens, reserved max output tokens (4096), "estimates, not exact counts". Builds the graph only; no network.
+6. Tests
+   tests/request.test.js (68 -> 83 checks; new shape, no source in request, cards.py assembly, refusal), tests/meter.test.js (new, 17), tests/test_assembled_cards.py (new, 2: py_compile + import of 7-card cards.py and of every card), tests/assemble_cards.js (helper). templates_export.py and templates.js unchanged (no regeneration needed).
+   Results: unittest 127 OK (was 125); ports_logic 1247 passed; request 83 passed; meter 17 passed; card_templates.testing 209 of 209; ports_export --check 0; templates_export --check 0.
+
+SIZE, 7-card graph of sample_build2 (App Start, Enter Text, Trim, Case, Required, Banner, App End)
+   request, whole JSON:  before 12653 B (pretty) -> after 6533 B (compact)  (-48%)
+   input tokens (chars/4 estimate, system + graph): before 2825 -> after 1418  (-50%)
+   output tokens (estimate, model reply): before about 684 (cards.py + main.py, reply.txt 2735 chars) -> after about 175 (main.py only); reserve now 4096 (was 8192)
+   cards.py (5068 B) is now written by the app, not generated: 0 model tokens.
+   Estimates only; real model usage not measured (no network).
+
+NOT DONE / RISKS: no real model reply tested against the new prompt (main.py quality unverified); task completion time not measured; Python 3.10 not run (3.13 only).
+

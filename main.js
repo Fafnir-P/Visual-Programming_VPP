@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { promisify } = require('util');
 const { pathToFileURL } = require('url');
+const { createLockout } = require('./lockout');
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -12,6 +13,12 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_.-]{3,32}$/;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 256;
 const MAX_KEY_LENGTH = 4096;
+
+const lockout = createLockout();
+
+function isAppUrl(url) {
+  return typeof url === 'string' && url.split(/[?#]/)[0] === APP_URL;
+}
 
 let mainWindow = null;
 let currentUser = null; // lower-case account name, or null for a guest
@@ -72,12 +79,16 @@ async function registerAccount(username, password) {
     return { ok: false, error: 'Password must be at least ' + MIN_PASSWORD + ' characters.' };
   }
   const name = username.toLowerCase();
-  const users = readStore('accounts.json', { items: [] });
-  if (findAccount(users, name)) {
+  if (findAccount(readStore('accounts.json', { items: [] }), name)) {
     return { ok: false, error: 'That username is taken.' };
   }
   const salt = crypto.randomBytes(16);
   const hash = await hashPassword(password, salt);
+  // Read again after the await: no other call can run between this read and the write.
+  const users = readStore('accounts.json', { items: [] });
+  if (findAccount(users, name)) {
+    return { ok: false, error: 'That username is taken.' };
+  }
   users.items.push({ name, salt: salt.toString('base64'), hash: hash.toString('base64') });
   writeStore('accounts.json', users);
   currentUser = name;
@@ -90,6 +101,10 @@ async function loginAccount(username, password) {
     return fail;
   }
   const name = username.toLowerCase();
+  const wait = lockout.remaining(name);
+  if (wait > 0) {
+    return { ok: false, error: 'Too many wrong tries. Try again in ' + Math.ceil(wait / 1000) + ' seconds.' };
+  }
   const users = readStore('accounts.json', { items: [] });
   const account = findAccount(users, name);
   // Always do one hash so an unknown name takes as long as a wrong password.
@@ -97,9 +112,11 @@ async function loginAccount(username, password) {
   const hash = await hashPassword(password, salt);
   const ok = account && crypto.timingSafeEqual(hash, Buffer.from(account.hash, 'base64'));
   if (!ok) {
+    lockout.fail(name);
     await new Promise((resolve) => setTimeout(resolve, 500));
     return fail;
   }
+  lockout.success(name);
   currentUser = name;
   return { ok: true, username: name };
 }
@@ -187,7 +204,7 @@ function handle(channel, fn) {
       && frame
       && !frame.parent
       && typeof frame.url === 'string'
-      && frame.url.split(/[?#]/)[0] === APP_URL;
+      && isAppUrl(frame.url);
     if (!fromApp) return { ok: false, error: 'Not allowed.' };
     try {
       return await fn(...args);
@@ -241,9 +258,9 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, 'prototype', 'index.html'));
 
-  // Block navigation away from local files.
+  // Block navigation away from the app page.
   win.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) {
+    if (!isAppUrl(url)) {
       event.preventDefault();
     }
   });

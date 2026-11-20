@@ -1,0 +1,39 @@
+import os, sys
+d = os.path.dirname(os.path.abspath(__file__))
+while not os.path.isdir(os.path.join(d, 'card_templates')) and os.path.dirname(d) != d: d = os.path.dirname(d)
+sys.path.insert(0, d)
+import argparse
+import json
+
+from card_templates.runtime import Context, Store, CardError
+from cards import (enter_text, trim_whitespace, change_text_case, check_field_is_required,
+                   enter_number, calculate_from_two_values, format_currency_value)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--text', default=None)
+    ap.add_argument('--number', default=None)
+    ap.add_argument('--number', default=None)
+    args = ap.parse_args()
+    ctx = Context(store=Store())
+    try:
+        n2 = enter_text(ctx, value=args.text, name='text', label='Text', required=False,
+                        max_length=100, placeholder='', help_text='')
+        n3 = trim_whitespace(ctx, text=n2['value'])
+        n4 = change_text_case(ctx, text=n3['text'], case='upper')
+        n5 = check_field_is_required(ctx, value=n4['text'], field='value')
+        n6 = enter_number(ctx, value=args.number, name='number', label='Number', required=False,
+                          min_value=None, max_value=None, placeholder='', help_text='')
+        n7 = enter_number(ctx, value=args.number, name='number', label='Number', required=False,
+                          min_value=None, max_value=None, placeholder='', help_text='')
+        n8 = calculate_from_two_values(ctx, first=n6['value'], second=n7['value'], operation='add', places=2)
+        n9 = format_currency_value(ctx, value=n8['result'], symbol='$', separator=',', decimals=2)
+    except CardError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps(n9))
+
+
+if __name__ == '__main__':
+    main()

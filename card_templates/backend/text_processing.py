@@ -3,10 +3,79 @@ from __future__ import annotations
 
 import re
 
-from ..runtime import CardError, as_text, bounded, card, get_field, is_blank, try_number
+from ..runtime import MAX_TEXT_LENGTH, CardError, as_text, bounded, card, get_field, is_blank, try_number
 
 CATEGORY = "Backend Processing"
 GROUP = "Text Processing"
+
+_QUANTIFIER = re.compile(r"\{\d*(,\d*)?\}")
+
+
+def _check_safe_pattern(pattern, text_length: int) -> None:
+    """Refuse patterns that can make the regex engine run for minutes: nested repeats such as (a+)+,
+    a repeated group with | inside, more than 2 open-ended repeats, a pattern over 200 characters, or
+    text too long for the pattern. A search with k open-ended repeats costs about length^(k+1) steps,
+    so the text limit is 100000 with none, 10000 with one and 1000 with two."""
+    if not isinstance(pattern, str) or not pattern or len(pattern) > 200:
+        raise CardError("invalid_input", "Pattern must be 1 to 200 characters.")
+    groups = []          # one flag pair per open group: [has a repeat inside, has | inside]
+    last_group = None    # the group that just closed, if the previous item was ")"
+    open_ended = 0
+    i, n = 0, len(pattern)
+    while i < n:
+        ch = pattern[i]
+        group_closed, last_group = last_group, None
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "[":
+            i += 2 if pattern[i + 1:i + 2] == "^" else 1
+            i += 1   # a "]" right after "[" or "[^" is a letter
+            while i < n and pattern[i] != "]":
+                i += 2 if pattern[i] == "\\" else 1
+            i += 1
+            continue
+        if ch == "(":
+            groups.append([False, False])
+            if pattern[i + 1:i + 2] == "?":   # (?: (?= (?<name> (?i) ...: skip the marker, it is not a repeat
+                i += 2
+                while i < n and pattern[i] not in ":)=!>":
+                    i += 1
+                i += 0 if pattern[i:i + 1] == ")" else 1
+                continue
+        elif ch == ")":
+            if groups:
+                last_group = groups.pop()
+                if groups:
+                    groups[-1][0] = groups[-1][0] or last_group[0]
+                    groups[-1][1] = groups[-1][1] or last_group[1]
+        elif ch == "|":
+            if groups:
+                groups[-1][1] = True
+        else:
+            size = 1
+            repeat = ch in "*+?"
+            unbounded = ch in "*+"
+            if ch == "{":
+                m = _QUANTIFIER.match(pattern, i)
+                if m:
+                    size, repeat, unbounded = m.end() - i, True, m.group(1) == "," or m.group().endswith(",}")
+            if repeat:
+                if ch != "?" and group_closed and (group_closed[0] or group_closed[1]):
+                    raise CardError("bad_expression", "Pattern repeats a group that already repeats or has choices; that can hang.")
+                open_ended += unbounded
+                if groups:
+                    groups[-1][0] = True
+                i += size
+                if pattern[i:i + 1] in ("?", "+"):   # lazy or possessive mark
+                    i += 1
+                continue
+        i += 1
+    if open_ended > 2:
+        raise CardError("bad_expression", "Pattern has more than 2 open-ended repeats (* + {n,}); that can hang.")
+    limit = (MAX_TEXT_LENGTH, 10_000, 1_000)[open_ended]
+    if text_length > limit:
+        raise CardError("limit_exceeded", f"Text is too long for this pattern (limit {limit} characters).")
 
 
 @card(
@@ -77,11 +146,27 @@ def split_text_by_separator(ctx, *, text, separator: str = ",", trim: bool = Tru
             "args": {"text": "test", "pattern": "["},
             "code": "bad_expression",
         },
+        {
+            "label": "nested repeat could hang",
+            "args": {"text": "a" * 28 + "!", "pattern": "(a+)+$"},
+            "code": "bad_expression",
+        },
+        {
+            "label": "text too long for a pattern with one repeat",
+            "args": {"text": "a" * 10_001, "pattern": "a+"},
+            "code": "limit_exceeded",
+        },
     ],
 )
 def search_text_for_pattern(ctx, *, text, pattern: str, case_sensitive: bool = False) -> dict:
-    """Finds whether a text field contains a specified word, phrase, or pattern."""
+    """Finds whether a text field contains a specified word, phrase, or pattern.
+
+    Limits (so a pattern cannot hang the app): pattern up to 200 characters; no repeated group that
+    already repeats or holds a choice ("(a+)+", "(a|b)*"); at most 2 open-ended repeats (* + {n,});
+    text up to 100000 characters with no open-ended repeat, 10000 with one, 1000 with two.
+    """
     s = as_text(text, "text")
+    _check_safe_pattern(pattern, len(s))
     flags = 0 if case_sensitive else re.IGNORECASE
     try:
         match = re.search(pattern, s, flags)

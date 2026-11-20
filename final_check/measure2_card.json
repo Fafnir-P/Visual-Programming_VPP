@@ -1,0 +1,150 @@
+{
+  "measurer": "C",
+  "pythonVersion": "3.13.7",
+  "orderline": {
+    "timingMs": {
+      "serializeGraph": {
+        "min": 0.0803,
+        "median": 0.0877,
+        "max": 0.3154
+      },
+      "compileMainPy": {
+        "min": 0.1089,
+        "median": 0.1168,
+        "max": 0.7183
+      },
+      "buildDeterministicFiles": {
+        "min": 0.0842,
+        "median": 0.0909,
+        "max": 0.7708
+      },
+      "writeProject": {
+        "min": 0.5139,
+        "median": 0.5638,
+        "max": 0.6157
+      },
+      "copyCardTemplates_not_part_of_app": {
+        "min": 37.9419,
+        "median": 40.0099,
+        "max": 45.5692
+      },
+      "pythonC1": {
+        "min": 108.826,
+        "median": 115.2927,
+        "max": 119.0564
+      }
+    },
+    "checks": {
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": true
+    },
+    "unitTest_test_orderline": "5 OK",
+    "fileSizes": {
+      "cards.py": {
+        "bytes": 3881,
+        "lines": 87
+      },
+      "main.py": {
+        "bytes": 1966,
+        "lines": 38
+      }
+    },
+    "meterSummary": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "totalTokens": 0,
+      "waitMs": null,
+      "accounting": "estimate",
+      "note": "assembled by the app"
+    },
+    "modelTokensEstimate": {
+      "input": 0,
+      "output": 0,
+      "accounting": "estimate"
+    }
+  },
+  "modelPathFallback": {
+    "buildOk": false,
+    "gaps": [
+      {
+        "card": "Enter Number (n7)",
+        "missing": "the name \"number\" is already used by Enter Number (n6); give each card its own name",
+        "nodeIDs": [
+          "n7"
+        ]
+      }
+    ],
+    "requestBodyBytes": 4588,
+    "estInputTokens": 1013,
+    "systemPromptChars": 1955,
+    "graphChars": 2093,
+    "maxTokensReserved": 4096,
+    "buildProjectFiles": {
+      "gaps": [],
+      "files": [
+        "cards.py",
+        "main.py"
+      ]
+    }
+  },
+  "card23": {
+    "cards": 23,
+    "allLinksOk": true,
+    "compileOk": true,
+    "gaps": [],
+    "fileSizes": {
+      "cards.py": {
+        "bytes": 5042,
+        "lines": 113,
+        "estTokens": 1261
+      },
+      "main.py": {
+        "bytes": 3561,
+        "lines": 53,
+        "estTokens": 891
+      }
+    },
+    "equivalentHandWrittenEstTokens_label": "estimate of equivalent hand-written output (chars/4)",
+    "equivalentHandWrittenEstTokens": 2151,
+    "buildMs": [
+      0.3152,
+      0.6071,
+      0.2699,
+      0.3316,
+      0.2519
+    ],
+    "pythonRunMs": [
+      82.866,
+      82.8844,
+      80.6944
+    ],
+    "runOk": {
+      "code": 0,
+      "stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\", \"with_shipping\": \"EUR 5.50\", \"change_pct\": 20.0}",
+      "stderr": ""
+    },
+    "runRepeatIdentical": true,
+    "badNumber": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "Qty must be a number."
+    },
+    "missingFlags": {
+      "code": 1,
+      "stdout": "",
+      "stderr": "first must be a number."
+    },
+    "modelPathIfUsed": {
+      "requestBodyBytes": 6448,
+      "estInputTokens": 1401
+    }
+  },
+  "notMeasured": [
+    "user task completion time (drag/link/configure)",
+    "real Bedrock latency",
+    "real token counts",
+    "Electron UI"
+  ]
+}

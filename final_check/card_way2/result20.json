@@ -1,0 +1,173 @@
+{
+  "cards": 23,
+  "linkChecks": [
+    {
+      "link": "s event t1 _start",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "t1 value t2 text",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "t2 text t3 text",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "t3 text t4 text",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "t4 text t5 text",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "a1 value a3 first",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "a2 value a3 second",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "a3 result a4 value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "a4 value a5 value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "b1 value b3 first",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "b2 value b3 second",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "b3 result b4 value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "b4 result b5 value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "b5 value b6 value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "c1 value c3 old_value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "c2 value c3 new_value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "c3 change c4 value",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "t5 text b7 value_1",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "a5 text b7 value_2",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "b6 text b7 value_3",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "c4 value b7 value_4",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "link": "b7 _done e finish",
+      "ok": true,
+      "message": ""
+    }
+  ],
+  "allLinksOk": true,
+  "generationIssues": [],
+  "compileOk": true,
+  "gaps": [],
+  "fileSizes": {
+    "cards.py": {
+      "bytes": 5042,
+      "lines": 113,
+      "estTokens": 1261
+    },
+    "main.py": {
+      "bytes": 3561,
+      "lines": 53,
+      "estTokens": 891
+    }
+  },
+  "equivalentHandWrittenEstTokens": 2151,
+  "run_ok": {
+    "code": 0,
+    "stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\", \"with_shipping\": \"EUR 5.50\", \"change_pct\": 20.0}",
+    "stderr": ""
+  },
+  "run_repeat": {
+    "code": 0,
+    "stdout": "{\"customer\": \"Ada Lovelace\", \"total\": \"$7.50\", \"with_shipping\": \"EUR 5.50\", \"change_pct\": 20.0}",
+    "stderr": ""
+  },
+  "run_blank_ok": {
+    "code": 0,
+    "stdout": "{\"customer\": \"Bob\", \"total\": \"$7.50\", \"with_shipping\": \"EUR 5.50\", \"change_pct\": 20.0}",
+    "stderr": ""
+  },
+  "run_badnum": {
+    "code": 1,
+    "stdout": "",
+    "stderr": "Qty must be a number."
+  },
+  "run_missing_flag": {
+    "code": 1,
+    "stdout": "",
+    "stderr": "first must be a number."
+  },
+  "pythonRunMs": [
+    82.866,
+    82.8844,
+    80.6944
+  ],
+  "buildDeterministicFilesMs": [
+    0.3152,
+    0.6071,
+    0.2699,
+    0.3316,
+    0.2519
+  ],
+  "modelPathIfUsed": {
+    "requestBodyBytes": 6448,
+    "estInputTokens": 1401
+  }
+}

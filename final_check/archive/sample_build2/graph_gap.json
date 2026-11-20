@@ -1,0 +1,276 @@
+{
+  "nodes": [
+    {
+      "id": "n1",
+      "catalogID": "catalog_156",
+      "title": "App Start",
+      "category": "trigger",
+      "templateCode": "def app_start(ctx, *, description: str='App starts') -> dict:\n    ctx.require_preview()\n    if not isinstance(description, str):\n        raise CardError('invalid_input', 'The note must be text.')\n    now = iso(ctx.now())\n    return {'event': {'kind': 'app_start', 'at': now, 'description': description}, 'started_at': now}",
+      "config": {
+        "description": "App starts"
+      },
+      "runtimeNames": [
+        "CardError",
+        "iso"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "event",
+            "class": "control"
+          },
+          {
+            "id": "started_at",
+            "class": "date"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n2",
+      "catalogID": "catalog_001",
+      "title": "Enter Text",
+      "category": "ui",
+      "templateCode": "def enter_text(ctx, *, value=None, name: str='text', label: str='Text', required: bool=False, max_length: int=100, placeholder: str='', help_text: str='') -> dict:\n    spec = {'type': 'text', 'required': required, 'max_length': max_length}\n    clean = coerce_value(spec, value, label)\n    node = view('input.text', id=name, label=label, value=clean or '', required=required, maxLength=max_length, placeholder=placeholder, help=help_text)\n    return {'view': node, 'value': clean}",
+      "config": {
+        "name": "text",
+        "label": "Text",
+        "required": false,
+        "max_length": 100,
+        "placeholder": "",
+        "help_text": ""
+      },
+      "runtimeNames": [
+        "coerce_value",
+        "view"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "value",
+            "class": "text",
+            "optional": true,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "view",
+            "class": "view"
+          },
+          {
+            "id": "value",
+            "class": "text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n3",
+      "catalogID": "catalog_040",
+      "title": "Trim Whitespace",
+      "category": "backend",
+      "templateCode": "def trim_whitespace(ctx, *, text) -> dict:\n    s = as_text(text, 'text')\n    return {'text': s.strip()}",
+      "config": {},
+      "runtimeNames": [
+        "as_text"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "text",
+            "class": "text",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "text",
+            "class": "text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n4",
+      "catalogID": "catalog_041",
+      "title": "Change Text Case",
+      "category": "backend",
+      "templateCode": "def change_text_case(ctx, *, text, case: str='upper') -> dict:\n    s = as_text(text, 'text')\n    if case == 'upper':\n        return {'text': s.upper()}\n    if case == 'lower':\n        return {'text': s.lower()}\n    if case == 'title':\n        return {'text': s.title()}\n    raise CardError('invalid_input', f'Case must be upper, lower or title (got {case!r}).')",
+      "config": {
+        "case": "upper"
+      },
+      "runtimeNames": [
+        "CardError",
+        "as_text"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "text",
+            "class": "text",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "text",
+            "class": "text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n5",
+      "catalogID": "catalog_134",
+      "title": "Check Field Is Required",
+      "category": "logic",
+      "templateCode": "def check_field_is_required(ctx, *, value, field: str='value') -> dict:\n    if is_blank(value):\n        raise CardError('required', f'{field} is required.', {'field': field})\n    return {'value': value}",
+      "config": {
+        "field": "value"
+      },
+      "runtimeNames": [
+        "CardError",
+        "is_blank"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "value",
+            "class": "any",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "value",
+            "class": "any"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n6",
+      "catalogID": "catalog_033",
+      "title": "Show Message Banner",
+      "category": "ui",
+      "templateCode": "def show_message_banner(ctx, *, message, variant: str='info', dismissible: bool=True, icon: str='') -> dict:\n    if not isinstance(message, str):\n        message = str(message)\n    if not message.strip():\n        raise CardError('required', 'Banner needs a message.')\n    if variant not in ('success', 'info', 'warning', 'error'):\n        variant = 'info'\n    node = view('display.banner', message=message, variant=variant, dismissible=dismissible, icon=icon)\n    return {'view': node}",
+      "config": {
+        "variant": "info",
+        "dismissible": true,
+        "icon": ""
+      },
+      "runtimeNames": [
+        "CardError",
+        "view"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "message",
+            "class": "text",
+            "optional": false,
+            "multi": false
+          }
+        ],
+        "outputs": [
+          {
+            "id": "view",
+            "class": "view"
+          }
+        ]
+      }
+    },
+    {
+      "id": "n7",
+      "catalogID": "catalog_157",
+      "title": "App End",
+      "category": "trigger",
+      "templateCode": "def app_end(ctx, *, finish, message: str='The app has finished') -> dict:\n    if finish is None:\n        raise CardError('invalid_input', 'Nothing has reached the end.')\n    if not isinstance(message, str):\n        raise CardError('invalid_input', 'The message must be text.')\n    ctx.store.log_event('app_end', message, {'at': iso(ctx.now())})\n    return {}",
+      "config": {
+        "message": "The app has finished"
+      },
+      "runtimeNames": [
+        "CardError",
+        "iso"
+      ],
+      "requiredConfig": [],
+      "ports": {
+        "inputs": [
+          {
+            "id": "finish",
+            "class": "control",
+            "optional": false,
+            "multi": true
+          }
+        ],
+        "outputs": []
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": {
+        "node": "n2",
+        "port": "value"
+      },
+      "to": {
+        "node": "n3",
+        "port": "text"
+      }
+    },
+    {
+      "id": "e3",
+      "from": {
+        "node": "n4",
+        "port": "text"
+      },
+      "to": {
+        "node": "n5",
+        "port": "value"
+      }
+    },
+    {
+      "id": "e4",
+      "from": {
+        "node": "n5",
+        "port": "value"
+      },
+      "to": {
+        "node": "n6",
+        "port": "message"
+      }
+    },
+    {
+      "id": "e5",
+      "from": {
+        "node": "n1",
+        "port": "event"
+      },
+      "to": {
+        "node": "n7",
+        "port": "finish"
+      }
+    }
+  ],
+  "order": [
+    "n1",
+    "n2",
+    "n3",
+    "n4",
+    "n5",
+    "n6",
+    "n7"
+  ]
+}

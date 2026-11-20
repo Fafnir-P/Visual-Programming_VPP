@@ -1,0 +1,25 @@
+MEASURER D - vibeCoding baseline, repeat (folder: final_check\vibe_way2\)
+Method: prompt.txt written first; T0/T1 = Get-Date around the single write of main.py; no network, no Bedrock key.
+Tokens = ceil(chars/4). INPUT = prompt.txt + fixed 600-token allowance for the assistant's system context. OUTPUT = main.py.
+model_step_seconds covers the write step incl. tool-call overhead (not pure generation). local_run_ms includes Python start-up.
+
+TASK 1 'Order line helper'            run1     run2     median(mean of 2)
+  input_tokens_est                     762      762      762
+  output_tokens_est                    190      251      220.5
+  total_tokens_est                     952      1013     982.5
+  attempts / repairs                   1 / 0    1 / 0    1 / 0
+  model_step_seconds                   4.44     4.77     4.61
+  local_run_ms                         47.6     49.6     48.6
+  checks C1 C2 C3 C4                   all PASS all PASS
+
+TASK 2 'Order batch helper' (big\)
+  input_tokens_est 830, output_tokens_est 691, total 1521
+  attempts 1, repairs 0, model_step_seconds 10.03, local_run_ms 49.9
+  checks B1 B2 B3 B4: all PASS
+  B1 input: --customer " bob smith " --email " Bob@Example.COM " --phone "(555) 123-4567" --qty 3 --price 19.99
+            --discount-percent 10 --tax-percent 8 --ship-date 2026-01-30 --days-to-deliver 5
+  B1 hand-computed: subtotal 59.97, discount 6.00 (5.997 rounded), tax 8% of 53.97 = 4.32, total 58.29, delivery 2026-02-04. Matched.
+
+Assumptions in Task 2 (spec was silent): tax is applied after discount; rounding is half-up; discount over 100% rejected; negative days rejected.
+Honest notes: no failures, no repairs. Only 2 task-1 runs, so the median is the mean of two. The model step is one-shot, so time is small and noisy.
+Files: vibe_way2\run1|run2|big\{prompt.txt,main.py,T0.txt,T1.txt}, vibe_way2\checks.py, measure2_vibe.json

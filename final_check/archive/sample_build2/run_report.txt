@@ -1,0 +1,73 @@
+SAMPLE BUILD 2 REPORT (retest after fixes) - independent tester
+Generator = my own model ability. No Bedrock key, no network, no credential files.
+Only files under sample_build2\ were created. prototype/, card_templates/, tests/, Cards.md untouched.
+Python used: 3.13.7 (3.10 itself not tested).
+
+CARDS (7, run order n1..n7)
+ n1 App Start (start) | n2 Enter Text (view) | n3 Trim Whitespace | n4 Change Text Case
+ n5 Check Field Is Required | n6 Show Message Banner (view) | n7 App End (end)
+LINKS (each checked with classesCompatible from prototype/ports.js: all OK)
+ e1 n2.value(text)->n3.text(text)   e2 n3.text(text)->n4.text(text)
+ e3 n4.text(text)->n5.value(any)    e4 n5.value(any)->n6.message(text)
+ e5 n1.event(control)->n7.finish(control)
+ findGenerationIssues on the full graph: [] (no issues)
+
+REQUEST (built with assembleBedrockRequest in a node vm; script build_request.js)
+ request.json = 12653 bytes (system prompt 3656, graph text 7642). Cap 300000. Gap variant = 12450 bytes.
+
+FILES (written by parseGenerationReply from reply.txt into sample_build2\generated\)
+ cards.py, main.py. parse result: 2 files, 0 gaps.
+ (gap reply: gap_reply.txt -> parse: 0 files, 1 gap {Change Text Case | input 'text' has no link}; generated_gap\ is empty)
+
+RUN OUTPUT (PYTHONPATH=project root; python main.py --text "  hello World ")
+ {"kind":"display.banner","id":null,"props":{"message":"HELLO WORLD","variant":"info","dismissible":true,"icon":""},"children":[]}
+ Run 1 and run 2: identical (run1_output.txt, run2_output.txt), exit 0.
+ No --text: CardError required "value is required." exit 1 (traceback, no handling, as the prompt forbids invented handling).
+ Blank --text "   ": same CardError, exit 1.
+ Without PYTHONPATH: ModuleNotFoundError: No module named 'card_templates' (exit 1).
+
+CHECKS
+ PASS  request builds for a valid 7-card graph; links valid; one link per input
+ PASS  new reply format (=== FILE / END FILE / GAP ===) was enough to write a reply
+ PASS  parseGenerationReply returns the 2 files; paths safe
+ PASS  program uses templateCode unchanged and the call rules in the prompt (Context(store=Store()), fn(ctx, **kw), result[port])
+ PASS  program runs twice with identical output (HELLO WORLD banner)
+ PASS  gap case: unlinked required input is flagged by findGenerationIssues, GAP reply parses to 0 files + 1 gap
+ PASS  prompt now says Python 3.10+, no "placeholder" wording, explains App Start/End and call style
+ FAIL  "python main.py" works as the prompt says: it fails unless card_templates is on the Python path (see L1)
+ FAIL  prompt alone gives an unambiguous value source for Enter Text (see L2)
+ Fixes from the first report: problems 1 (partly), 2, 3, 4, 5, 7 fixed as far as this graph shows; 6 (repeated templateCode) not fixed by design;
+ 8 (test nodes without role) fixed (test has role + findGenerationIssues).
+
+WHAT THE NEW PROMPT STILL LACKED (what I had to guess)
+ L1. Where card_templates comes from. The prompt says "module card_templates.runtime; do not copy it" and "run with python main.py",
+     but a generated main.py in its own folder cannot import it. I ran with PYTHONPATH set. Prompt should say: put the project root
+     on sys.path, or tell the model to add sys.path code, or say how the user starts it.
+ L2. Value for Enter Text. Rule says read "--<config name>" with "the card's config default". Enter Text config has no default for the
+     value (only name/label/required/...), and "config name" could mean the key "name" ("text") or the card's setting names.
+     Read literally with no default it is a GAP, which would stop every Enter card. I chose --text with default None. Say clearly:
+     flag name = config.name; default = None unless a default is given; None is allowed when required=false.
+ L3. "Prints the final result": which card's output? I printed the banner view as JSON. Not defined.
+ L4. How to handle CardError (traceback vs readable message vs exit code). I did nothing (prompt forbids inventing handling); output is a traceback.
+ L5. Whether cards.py should include imports for names in runtimeNames (I put them at the top of cards.py). The prompt says to put them
+     at the start, not which file.
+ L6. Which file layout (cards.py + main.py is my choice; the prompt does not name files except main.py).
+
+REVIEW FINDINGS (FIX | file | problem | severity)
+ FIX | card_templates/templates_export.py (build_entry) | `runtime` names are collected only from the card function, not from its own-module helpers. A helper that uses a runtime name loses it: Shift Date By Time (helper _same_shape calls iso(); iso not in runtimeNames), and Define App Settings (_save_settings calls check_identifier; not in runtimeNames). A generated program would raise NameError. Found with sample_build2\undef_check.py (209 cards; 4 with undefined names). | HIGH (breaks 2 cards)
+ FIX | card_templates/templates_export.py (_module_helpers) | Standard-library modules the card module imports (csv, io) are skipped (inspect.ismodule) and never listed, so Export Table / Import Records source uses csv.DictReader / io.StringIO with no import. The prompt does not tell the model to add stdlib imports. Add an "imports" list to each entry or add modules to `runtime`. | HIGH (breaks 2 cards: Import Records, Export Table)
+ FIX | tests (request.test.js / test_templates_export.py) | No test checks that every template (helpers + source) has no undefined names. That check (undef_check.py in sample_build2) would have caught the two items above. | MEDIUM
+ FIX | prototype/bedrock.js parseGenerationReply | A "=== GAP: <card> ===" line without " | " is silently dropped. An empty reply or a reply with no blocks returns {files:[], gaps:[]} with no message, so the caller cannot tell "success with nothing" from "gap". Return a gap when nothing was parsed. | MEDIUM
+ FIX | prototype/bedrock.js parseGenerationReply | Path check misses Windows names and tricks: "CON", "NUL.txt", "main.py::$DATA" (alternate data stream), and a NUL character "a\0b" are returned as files. ".." and absolute/drive/leading-backslash paths are refused (tested OK, also mixed \ and /). Also two files with the same path are both returned (second overwrites). The writer (not in the code yet, parseGenerationReply is not called anywhere) must resolve the path under the output folder, and reject these. Add: reject ":" anywhere, control chars, reserved device names, duplicates; cap file count and size. | MEDIUM (no writer yet, so not exploitable today)
+ FIX | prompt.js / bedrock.js | Prompt says relative path only, but "a/./b" and "~/x" pass. Harmless if the writer resolves paths. | LOW
+ FIX | prompt.js | See L1 to L4 above. L1 is a HIGH for the end user (program does not start). | HIGH (L1), MEDIUM (L2, L3)
+ FIX | prototype/bedrock.js MAX_REQUEST_BYTES | Cap counts only the graph text, not the system prompt (3656 B) or JSON overhead. Small (1 percent). Also graph is pretty-printed (indent 2) and repeated cards repeat templateCode (earlier problem 6, still open); this wastes bytes, not a correctness bug. | LOW
+ FIX | prototype/index.html (CSP) | No new risk from this diff: only one new <script src="templates.js"> (same origin), CSP script-src 'self' kept, no inline script. Note: connect-src 'self' will block a renderer fetch to bedrock-runtime.*.amazonaws.com when the network phase is built; that call must go through main.js. | INFO
+ FIX | prototype/templates.js | 208132 bytes (generated, loaded at start). Only a size note; --check passes. | INFO
+ OK   | templates_export.py --check exit 0; tests/request.test.js 29 passed 0 failed (re-run by me). Escaping: ensure_ascii=True; no code is run from the templates.
+
+VERDICT: CHANGES NEEDED
+ The new prompt and reply format work for this graph (build, parse, run twice, gap case all pass).
+ But the template export loses names for 4 of 209 cards (2 need runtime names from helpers, 2 need csv/io imports),
+ the prompt does not say how the program finds card_templates (L1), and the reply parser drops malformed GAP lines silently.
+Not checked: Python 3.10/3.11 run, a real model reply, the other 205 cards at run time, any code that writes the parsed files (none exists yet).

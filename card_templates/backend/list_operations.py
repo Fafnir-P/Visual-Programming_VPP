@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from ..runtime import (
     CardError,
+    as_int,
     bounded,
     card,
     compile_condition,
@@ -281,6 +282,8 @@ def paginate_record_list(ctx, *, records, page: int = 1, page_size: int = 10) ->
     """Splits a list into fixed-size pages and returns one page at a time."""
     if not isinstance(records, list):
         raise CardError("invalid_input", "Records must be a list.")
+    page = as_int(page, "page")
+    page_size = as_int(page_size, "page_size")
     if page < 1:
         raise CardError("invalid_input", "Page number must be at least 1.")
     if page_size < 1:
@@ -337,6 +340,8 @@ def take_record_range(ctx, *, records, start: int = 0, end: int = 10) -> dict:
     """Returns part of a list of records, from the start position up to (not including) the end position."""
     if not isinstance(records, list):
         raise CardError("invalid_input", "Records must be a list.")
+    start = as_int(start, "start")
+    end = as_int(end, "end")
     if start < 0:
         raise CardError("invalid_input", "Start position must be at least 0.")
     if end < start:

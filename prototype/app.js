@@ -425,6 +425,14 @@ function handleDocumentMouseUp(event) {
     }
 }
 
+// True when the element takes keys itself (so Delete/Backspace must not delete a card).
+function isEditingTarget(el) {
+    if (!el) return false;
+    if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(el.tagName)) return true;
+    if (el.isContentEditable) return true;
+    return !!(el.closest && el.closest('dialog'));
+}
+
 function handleKeyDown(event) {
     if (event.key === 'Escape') {
         if (!document.getElementById('toast').hidden) {
@@ -437,9 +445,9 @@ function handleKeyDown(event) {
             deselectAll();
         }
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
-        // Typing in the search box must never delete cards.
-        const tag = document.activeElement ? document.activeElement.tagName : '';
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        // Typing in a field, using a list or button, or an open dialog must never delete cards.
+        if (isEditingTarget(document.activeElement) || isEditingTarget(event.target)
+            || document.querySelector('dialog[open]')) return;
 
         // Prevent default backspace navigation
         if (event.key === 'Backspace') {
@@ -464,6 +472,77 @@ function render() {
     renderEdgeDraft();
     renderOrderList();
     renderStatus();
+    renderSettingsPanel();
+}
+
+// Settings panel: one field per setting of the selected card. Values go to node.config (and from there
+// into the request and main.py). Built with textContent / value only. Typing does not call render(),
+// so the focus stays, and links are never touched.
+function renderSettingsPanel() {
+    const panel = document.getElementById('settingsPanel');
+    const node = state.selectedNodeID ? state.nodes.get(state.selectedNodeID) : null;
+    const t = node ? CARD_TEMPLATES[node.title] : null;
+    if (!node || !t || !t.settings.length) {
+        panel.hidden = true;
+        panel.dataset.node = '';
+        return;
+    }
+    panel.hidden = false;
+    if (panel.dataset.node === node.id) return;
+    panel.dataset.node = node.id;
+    document.getElementById('settingsTitle').textContent = node.title + ' settings';
+    const box = document.getElementById('settingsFields');
+    box.textContent = '';
+    const current = nodeSettings(node, t);
+    t.settings.forEach((def, i) => {
+        const kind = settingKind(def);
+        const fieldID = 'setting_' + i;
+        const noteID = fieldID + '_note';
+        const row = document.createElement('div');
+        row.className = 'setting' + (kind === 'bool' ? ' check' : '');
+        const label = document.createElement('label');
+        label.htmlFor = fieldID;
+        label.textContent = def.name + (def.required ? ' (required)' : '');
+        let input;
+        if (kind === 'choice') {
+            input = document.createElement('select');
+            def.choices.forEach(c => addOption(input, c, c));
+            input.value = current[def.name] === undefined ? def.choices[0] : current[def.name];
+        } else {
+            input = document.createElement('input');
+            if (kind === 'bool') {
+                input.type = 'checkbox';
+                input.checked = current[def.name] === true;
+            } else {
+                input.type = 'text';
+                if (kind === 'number') input.inputMode = 'decimal';
+                input.value = settingDisplay(def, current[def.name]);
+            }
+        }
+        input.id = fieldID;
+        input.setAttribute('aria-describedby', noteID);
+        const note = document.createElement('div');
+        note.className = 'setting-note';
+        note.id = noteID;
+        note.setAttribute('role', 'status');
+        const commit = () => {
+            const r = parseSettingValue(def, kind === 'bool' ? input.checked : input.value);
+            if (!r.ok) {
+                note.textContent = r.error + ' Not saved.';
+                input.setAttribute('aria-invalid', 'true');
+                return;
+            }
+            note.textContent = '';
+            input.removeAttribute('aria-invalid');
+            if (!node.config) node.config = {};
+            node.config[def.name] = r.value;
+        };
+        input.addEventListener(kind === 'bool' || kind === 'choice' ? 'change' : 'input', commit);
+        if (kind === 'bool') { row.appendChild(input); row.appendChild(label); }
+        else { row.appendChild(label); row.appendChild(input); }
+        row.appendChild(note);
+        box.appendChild(row);
+    });
 }
 
 function renderCards() {
@@ -1146,12 +1225,32 @@ function handleGenerateClick() {
         message += `\n\nWarning: ${conflicts.size} card${conflicts.size !== 1 ? 's have' : ' has'} order conflicts with connected cards.`;
     }
     
+    message += '\n\n' + describeRequestSize();
     content.textContent = message;
     content.style.whiteSpace = 'pre-wrap';
     
     dialog.showModal();
 }
 
+// Size line for the first confirm dialog. Nothing is sent: this only builds the request and counts.
+// The input number is an ESTIMATE (about 4 characters per token); the output number is the reserve
+// (RESERVED_MAX_OUTPUT_TOKENS in bedrock.js), a ceiling and not a forecast.
+function describeRequestSize() {
+    try {
+        const full = serializeGraph();
+        const compiled = compileMainPy(full);
+        if (compiled.ok) {
+            return 'The app writes cards.py and main.py itself. The model is not needed: 0 model tokens (estimate).';
+        }
+        const input = estimateTokens(SYSTEM_PROMPT) + estimateTokens(JSON.stringify(slimGraph(full, compiled.gaps)));
+        return `The app cannot write main.py alone (${compiled.gaps.length} gap${compiled.gaps.length !== 1 ? 's' : ''}: ` +
+            compiled.gaps.slice(0, 3).map(g => g.card + ': ' + g.missing).join('; ') + (compiled.gaps.length > 3 ? '; ...' : '') + `). ` +
+            `The model is needed. Estimate before sending: about ${input} input tokens. Reserved for the reply: up to ` +
+            `${RESERVED_MAX_OUTPUT_TOKENS} output tokens. These are estimates, not exact counts.`;
+    } catch (error) {
+        return 'Token estimate not available: ' + error.message;
+    }
+}
 function handleCancelDialog() {
     const dialog = document.getElementById('confirmDialog');
     dialog.close();
@@ -1230,15 +1329,24 @@ function focusNode(nodeID) {
 function runGeneration() {
     // Set build confirmed flag
     state.buildConfirmed = true;
-    
-    // Validate that assembleBedrockRequest can build without error (but don't send)
+
     try {
-        const request = assembleBedrockRequest();
-        // Successfully assembled; we could validate structure here if needed
+        const built = buildDeterministicFiles();
+        if (built.ok) {
+            // No model call: the app assembled the project. Record that in the meter.
+            resetMeter();
+            recordUsage({ input: 0, output: 0, estimated: true, note: 'assembled by the app' });
+            state.project = built.files;
+            reportNotice('assembled', 'cards.py and main.py were written by the app. Model tokens: 0 (estimate, ' + summary().note + ').');
+        } else {
+            state.project = null;
+            // Validate that the (trimmed) request builds; sending it is a later phase.
+            assembleBedrockRequest(built.gaps);
+            reportNotice('needs_model', 'The app could not wire ' + built.gaps.length + ' thing(s) itself; the model is needed for them.');
+        }
     } catch (error) {
-        // If assembly fails, show error (shouldn't happen with current implementation)
         alert('Error assembling request: ' + error.message);
     }
-    
+
     renderStatus();
 }

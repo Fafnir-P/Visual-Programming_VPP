@@ -1,0 +1,72 @@
+﻿SAMPLE BUILD REPORT  (tester: own model as generator; no network, no Bedrock key, no credential files)
+
+CARDS (8, run order n1..n8)
+ n1 App Start (trigger) | n2 Enter Number (ui) | n3 Enter Number (ui) | n4 Calculate From Two Values (backend)
+ n5 Validate Number Range (logic) | n6 Format Currency Value (backend) | n7 Show Message Banner (ui) | n8 App End (trigger)
+LINKS (all checked with prototype/ports.js classesCompatible): 
+ e1 n2.value->n4.first | e2 n3.value->n4.second | e3 n4.result->n5.value | e4 n5.value->n6.value
+ e5 n6.text->n7.message (text) | e6 n1.event->n8.finish (control)
+
+REQUEST (built with assembleBedrockRequest in a node vm, same as tests/request.test.js)
+ sample_build\request.json = 14413 bytes (system prompt 2526 B, graph text 10308 B). Gap variant request_gap.json = 14207 bytes.
+ App's own findGenerationIssues: full graph -> [] ; gap graph -> open_input n4.second ("has no link").
+
+GENERATED FILES (sample_build\generated\)
+ cards.py  73 lines  (templateCode of each card copied unchanged; Enter Number once)
+ main.py   44 lines  (calls the cards in order, wires by the edges)
+
+RUN 1 (python generated\main.py, exit 0):
+{
+  "kind": "display.banner",
+  "id": null,
+  "props": {
+    "message": "$19.75",
+    "variant": "info",
+    "dismissible": true,
+    "icon": ""
+  },
+  "children": []
+}
+RESULT: $19.75
+RUN 2 (same command again): output identical to run 1 (run2_output.txt).
+
+GAP TEST (edge e2 removed -> request_gap.json)
+ a) Model step: per SYSTEM_PROMPT the model reports the gap and writes no code (gap_response.txt).
+ b) Raw run: generated_gap\main.py = main.py with second=None. Output: CARD ERROR not_a_number - second must be a number.  (exit 1). Fails with a clear CardError, no guessed value.
+
+CHECKS
+ PASS  request builds for a valid 8-card graph (14413 B, far below the 300000 B cap)
+ PASS  every link valid by port class rules; one link per input
+ PASS  generated program runs with stdlib + card_templates.runtime only; prints banner "$19.75" (12.5 + 7.25 = 19.75)
+ PASS  program is deterministic across two runs
+ PASS  app's issue checker flags the unlinked required input; gap is reported, not guessed
+ PASS  templateCode reused as is (functions called with config defaults)
+ FAIL  program runs with no outside input: Enter Number cards have no way to receive a value (see problems 1)
+ FAIL  request alone tells the generator everything it needs (see problems 2, 3)
+
+WIRING / REQUEST PROBLEMS FOUND (not fixed; prototype/, card_templates/, tests/ untouched)
+ 1. Enter Number (and the other Enter/Toggle/Slider cards) take their value from an optional input "value" or from a UI
+    event. In a graph with nothing linked there, the generator has no source for the numbers. I had to invent a
+    USER_ENTRIES dict in main.py (marked GAP in a comment). The prompt says do not guess/invent; the request has no
+    setting such as "default value", so this cannot be solved from the request.
+ 2. The request does not say how to call a template. Every function takes ctx first, but the prompt never explains
+    Context / Store, the module path (card_templates.runtime), or how to read outputs (dict keyed by output port id).
+    I used Context(store=Store()) from reading runtime.py. A real model without repo access would guess.
+ 3. Python version: SYSTEM_PROMPT says "Target Python 3.8+", but templateCode uses 'float | None' (Validate Number
+    Range signature), which needs Python 3.10+ at def time (the module's 'from __future__ import annotations' is lost
+    when only the function source is exported). Ran here on 3.13 only; not tested on 3.8.
+ 4. SYSTEM_PROMPT still says "template code placeholder" under "Each card has" (stale wording; tests check a different
+    phrase so they miss it).
+ 5. Output format is vague: prompt asks for a "list of files and content" but not a machine-readable format, so the
+    app cannot reliably split the reply into files. Also nothing says what the program should print at the end
+    (I printed the banner view JSON and RESULT: line myself).
+ 6. Bloat: the same Enter Number source (512 B) is sent twice; both nodes carry identical config (name 'number'),
+    so two cards would produce the same field id. Each node also repeats keys like catalogID, category. 10.3 KB for 8
+    cards is about 1.3 KB per card; fine at this size.
+ 7. Control links: implicit _start/_done ports are not sent; order alone carries sequence. Worked here, but App End.finish
+    must be linked (I linked App Start.event -> App End.finish); the prompt does not say what "finish" means.
+ 8. Harness note (not an app defect): nodes without 'role' make findGenerationIssues report no_start/no_end; tests/
+    request.test.js nodes omit role too, so they never cover it.
+
+OVERALL: PARTIAL. The request path works and a small program was built and ran, but only after the generator filled
+gaps 1-3 by hand. Not checked: Python 3.8/3.9, real model output, response parsing in the app.

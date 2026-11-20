@@ -1,0 +1,4 @@
+Order batch helper: Python 3.10 CLI with several steps in one program. Reads --customer, --email, --phone, --qty, --price, --discount-percent, --tax-percent, --ship-date (YYYY-MM-DD), --days-to-deliver.
+Trim and Title-Case the customer; lowercase and validate the email (must contain one @ and a dot after it); strip non-digits from the phone and require 10 digits; compute subtotal = qty*price, discount, tax, total; round to 2 decimals; format subtotal, discount, tax, total as '$X.XX'; compute delivery date = ship-date + days-to-deliver (ISO); reject negative qty/price; any invalid input -> exit 1 with a one-line stderr message; stdout one JSON with keys customer, email, phone, subtotal, discount, tax, total, delivery_date.
+Checks: B1 a valid example, expected output computed by hand; B2 bad email -> exit 1; B3 negative qty -> exit 1; B4 two runs identical.
+Python 3.10, standard library only, write main.py

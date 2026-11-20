@@ -1,0 +1,20 @@
+﻿MEASURE A - CARD WAY - Order line helper
+Graph: 10 cards (App Start, Enter Text, Trim Whitespace, Change Text Case, Check Field Is Required, Enter Number x2, Calculate From Two Values, Format Currency Value, App End). All 8 links pass checkConnection (ports.js).
+Request: 8568 bytes. INPUT tokens est 1840 per attempt (system prompt 2753 chars + graph 4605 chars). If the repair resends the request: 3680.
+OUTPUT tokens est: attempt1 458 + attempt2 397 = 855.
+Attempts: 2 (1 repair). Model step seconds: 6.28 (attempt1), 7.02 (attempt2), total 13.3. (My own writing time, not Bedrock latency; T1 of attempt 1 was read in the same step as the file write.)
+cards.py: 2956 bytes, app-written, not generated (0 model tokens).
+Local ms: request build 2.98, assembly (buildProjectFiles) 0.53, run ~83 per run.
+Checks (final main.py): C1 pass, C2 pass, C3 pass, C4 pass. Attempt 1: all 4 failed (C2/C4 only "exit 1" via a Python traceback).
+Accounting: estimate (chars/4).
+
+Output JSON: Format Currency gives only {"text": "$7.50"}; no card gives {"customer","total"}. main.py builds the JSON from card results (customer from Check Field Is Required, total from Format Currency).
+
+What the prompt lacked / defects found in the request:
+1. Card settings cannot be set. serializeGraph sends only defaults; the app has no settings UI. Change Text Case default is 'upper' (need title), Calculate default is 'add' (need multiply). The prompt says pass defaults, so a literal reply is wrong. Repair had to override case='title' and operation='multiply' with no source in the graph.
+2. Flag names come from the setting 'name'. Both Enter Number cards default to 'number', and Enter Text to 'text'. A literal main.py has duplicate --number (argparse crash) and --text, not --customer/--qty/--price. Repair renamed the flags using the spec, not the graph.
+3. RESULT rule prints only the last card's outputs, so the spec JSON is not reachable; the prompt has no way to say which fields to print.
+4. App Start 'event' -> Enter Text '_start' link was in the graph but implicit ports are filtered out of node inputs, and the edge is sent; harmless but the prompt says the event is not a call.
+5. Prompt says validation is not allowed beyond cards; empty-name and number errors worked because cards raise CardError.
+Files: final_check\card_way\ (request.json, graph.txt, reply1.txt, reply2.txt, proj1\, proj2\ final, build_request.js, write_files.js, run_checks.py).
+Not checked: real Bedrock latency/tokens; input resend count is an assumption.

@@ -1,0 +1,10 @@
+﻿const fs=require('fs'),path=require('path'),vm=require('vm');
+const ctx=vm.createContext({console,TextEncoder});
+for(const f of ['catalog.js','templates.js','ports.js','prompt.js','models.js','bedrock.js']) vm.runInContext(fs.readFileSync(path.join('prototype',f),'utf8'),ctx,{filename:f});
+const p=t=>{ctx.__t=t;return JSON.stringify(vm.runInContext('parseGenerationReply(__t)',ctx));};
+const F=n=>'=== FILE: '+n+' ===\nx\n=== END FILE ===';
+for(const n of ['a:b','a/./b','CON','NUL.txt','a\0b','main.py::$DATA','a/b ','~/x','//srv/x','a\\..\\b','..\\x']) console.log(JSON.stringify(n),p(F(n)));
+console.log('gap no pipe',p('=== GAP: Foo is missing ==='));
+console.log('empty',p(''));
+console.log('dup',p(F('a.py')+'\n'+F('a.py')));
+console.log('nested end',p('=== FILE: a.py ===\n=== FILE: b.py ===\n=== END FILE ==='));
